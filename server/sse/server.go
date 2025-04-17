@@ -114,6 +114,55 @@ func K8sServer() (*server.MCPServer, error) {
 		),
 	), k8s.RestartDeploymentTool)
 
+	// 添加Kubernetes StatefulSet相关工具
+	svr.AddTool(mcp.NewTool("list_statefulsets",
+		mcp.WithDescription("列出指定命名空间中的所有StatefulSet"),
+		mcp.WithString("namespace",
+			mcp.Description("要查询的命名空间, 默认为default"),
+			mcp.DefaultString("default"),
+		),
+	), k8s.ListStatefulSetsTool)
+
+	svr.AddTool(mcp.NewTool("describe_statefulset",
+		mcp.WithDescription("查看StatefulSet的详细信息"),
+		mcp.WithString("statefulset_name", // Use statefulset_name
+			mcp.Required(),
+			mcp.Description("要查看的StatefulSet名称"),
+		),
+		mcp.WithString("namespace",
+			mcp.Description("StatefulSet所在的命名空间, 默认为default"),
+			mcp.DefaultString("default"),
+		),
+	), k8s.DescribeStatefulSetTool)
+
+	svr.AddTool(mcp.NewTool("scale_statefulset",
+		mcp.WithDescription("调整StatefulSet的副本数"),
+		mcp.WithString("statefulset_name",
+			mcp.Required(),
+			mcp.Description("要调整的StatefulSet名称"),
+		),
+		mcp.WithString("namespace",
+			mcp.Description("StatefulSet所在的命名空间, 默认为default"),
+			mcp.DefaultString("default"),
+		),
+		mcp.WithNumber("replicas",
+			mcp.Required(),
+			mcp.Description("要设置的副本数"),
+		),
+	), k8s.ScaleStatefulSetTool)
+
+	svr.AddTool(mcp.NewTool("restart_statefulset",
+		mcp.WithDescription("重启StatefulSet的所有Pod"),
+		mcp.WithString("statefulset_name",
+			mcp.Required(),
+			mcp.Description("要重启的StatefulSet名称"),
+		),
+		mcp.WithString("namespace",
+			mcp.Description("StatefulSet所在的命名空间, 默认为default"),
+			mcp.DefaultString("default"),
+		),
+	), k8s.RestartStatefulSetTool)
+
 	// 添加Kubernetes Service相关工具
 	svr.AddTool(mcp.NewTool("list_services",
 		mcp.WithDescription("列出指定命名空间中的所有Service"),
