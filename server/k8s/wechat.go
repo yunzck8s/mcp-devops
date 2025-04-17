@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings" // Import strings package
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -79,9 +80,13 @@ func SendWeChatMessageTool(ctx context.Context, request mcp.CallToolRequest) (*m
 		return mcp.NewToolResultText("消息内容不能为空"), fmt.Errorf("消息内容不能为空")
 	}
 
+	// 获取标题，为 text 类型也设置默认标题
 	title, _ := request.Params.Arguments["title"].(string)
-	if title == "" && (msgType == "template_card" || msgType == "markdown") {
-		title = "K8s集群通知" // 默认标题
+	if title == "" {
+		title = "系统通知" // 为 text 和 markdown 设置默认标题
+		if msgType == "template_card" {
+			title = "K8s集群通知" // template_card 使用不同的默认标题
+		}
 	}
 
 	webhookURL := os.Getenv("WECHAT_WEBHOOK_URL")
@@ -98,13 +103,32 @@ func SendWeChatMessageTool(ctx context.Context, request mcp.CallToolRequest) (*m
 
 	switch msgType {
 	case "text":
+		// 当类型为 text 时，自动转换为 Markdown 格式以支持颜色
+		var color = "info" // 默认颜色为 info (蓝色)
+		lowerContent := strings.ToLower(content)
+		// 基本的关键字判断来决定颜色
+		if strings.Contains(lowerContent, "error") || strings.Contains(lowerContent, "fail") || strings.Contains(lowerContent, "故障") || strings.Contains(lowerContent, "失败") || strings.Contains(lowerContent, "critical") || strings.Contains(lowerContent, "firing") {
+			color = "warning" // warning (橙色)
+		} else if strings.Contains(lowerContent, "success") || strings.Contains(lowerContent, "成功") || strings.Contains(lowerContent, "resolved") || strings.Contains(lowerContent, "已解决") {
+			color = "info" // info (蓝色) - 也可以用 comment (灰色) 或其他
+		}
+
+		// 构建 Markdown 内容
+		markdownContent := fmt.Sprintf("**%s**\n\n<font color=\"%s\">%s</font>\n\n<font color=\"comment\">%s</font>",
+			title,
+			color,
+			content,
+			time.Now().Format("2006-01-02 15:04:05"),
+		)
+
 		message = WeChatMessage{
-			MsgType: "text",
-			Text: &WeChatTextMessage{
-				Content: content,
+			MsgType: "markdown", // 发送类型改为 markdown
+			Markdown: &WeChatMarkdownMessage{
+				Content: markdownContent,
 			},
 		}
 	case "markdown":
+		// 如果用户明确指定 markdown，则直接使用提供的 content
 		message = WeChatMessage{
 			MsgType: "markdown",
 			Markdown: &WeChatMarkdownMessage{

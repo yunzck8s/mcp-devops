@@ -92,7 +92,7 @@ func DsscribePodTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.Cal
 	}
 
 	//格式化输出
-	var result *strings.Builder
+	var result strings.Builder // Initialize as a value type, not a pointer
 	result.WriteString(fmt.Sprintf("Name:				%s\n", pod.Name))
 	result.WriteString(fmt.Sprintf("Namespace:			%s\n", pod.Namespace))
 	result.WriteString(fmt.Sprintf("Priority:			%s\n", getPodPriority(pod)))

@@ -220,3 +220,7 @@ _site/ # Jekyll
 # *.mov
 # *.mp4
 # data/
+
+# cursor
+.history
+.env
