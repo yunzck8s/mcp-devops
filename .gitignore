@@ -1,0 +1,222 @@
+# --- Generic ---
+# Compiled source #
+###################
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+*.pyc
+*.pyo
+*.pyd
+
+# Archives #
+############
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# Logs and databases #
+######################
+*.log
+*.sql
+*.sqlite
+*.db
+*.db-journal # SQLite journals
+
+# OS generated files #
+######################
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Temporary files #
+###################
+*.bak
+*.gho
+*.orig
+*.swp
+*.swo
+*.tmp
+*~
+
+# Backup files from certain editors #
+#####################################
+*~
+#*#
+.#*
+
+# --- IDEs / Editors ---
+# JetBrains IDEs (IntelliJ, PyCharm, WebStorm, etc.) #
+######################################################
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Visual Studio Code #
+######################
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# Visual Studio #
+#################
+*.suo
+*.user
+*.sln.docstates
+*.vcxproj.filters
+*.vcxproj.user
+*.vcxproj.filters
+UpgradeLog*.htm
+# NuGet Packages
+*.nupkg
+# Microsoft Visual Studio Cache files
+# files ending in .cache can be ignored
+*.cache
+# Tmp files
+*.tmp
+
+# Eclipse #
+###########
+.project
+.classpath
+.settings/
+*.metadata
+
+# Netbeans #
+############
+nbproject/
+nbactions.xml
+nb-configuration.xml
+
+# Sublime Text #
+################
+*.sublime-project
+*.sublime-workspace
+
+# --- Dependency directories ---
+# Node.js #
+###########
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json # 视团队策略而定，有时会提交
+yarn.lock         # 视团队策略而定，有时会提交
+
+# Python #
+##########
+venv/
+.venv/
+env/
+.env/
+__pycache__/
+*.egg-info/
+*.egg
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# PHP / Composer #
+##################
+vendor/
+composer.lock # 视团队策略而定，有时会提交
+phpcs.cache
+phpunit.result.cache
+
+# Ruby / Bundler #
+##################
+vendor/bundle/
+.bundle/
+gems/
+
+# Go #
+######
+vendor/ # 通常使用 Go Modules 后不再需要提交 vendor
+*.exe
+*.test
+
+# Java / Maven / Gradle #
+#########################
+target/
+build/
+.gradle/
+*.war
+*.ear
+
+# --- Build output ---
+######################
+dist/
+out/
+bin/
+obj/
+release/
+public/ # 如果是构建输出目录 (e.g., Webpack)
+
+# --- Secrets / Sensitive Data ---
+# NEVER commit secrets, credentials, or API keys!
+# Use environment variables or secrets management tools.
+###################################################
+.env*
+!.env.example # 通常 .env.example 是安全的模板文件，可以提交
+secrets.*
+secret*
+*.pem
+*.key
+credentials*
+config.local.*
+
+# --- Other ---
+# Test reports / Coverage #
+###########################
+coverage/
+*.cover
+*.lcov
+
+# Uploads / Generated content (if stored in repo path) #
+########################################################
+uploads/
+public/uploads/
+media/ # 根据实际情况调整
+
+# Terraform #
+#############
+.terraform/
+*.tfstate
+*.tfstate.backup
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Documentation generator output #
+##################################
+_site/ # Jekyll
+# Add other documentation tool output dirs here
+
+# Large files (consider Git LFS) #
+##################################
+# *.psd
+# *.ai
+# *.mov
+# *.mp4
+# data/

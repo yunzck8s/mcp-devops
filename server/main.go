@@ -2,13 +2,14 @@ package main
 
 import (
 	"fmt"
-	"github.com/joho/godotenv"
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
 	"log"
 	"mcp-devops/server/k8s"
 	"net/http"
 	"os"
+
+	"github.com/joho/godotenv"
+	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
 )
 
 func main() {
@@ -193,6 +194,29 @@ func main() {
 			mcp.Description("要删除的命名空间名称"),
 		),
 	), k8s.DeleteNamespaceTool)
+
+	// 添加企业微信消息发送工具
+	svr.AddTool(mcp.NewTool("send_wechat_message",
+		mcp.WithDescription("发送企业微信消息通知"),
+		mcp.WithString("content",
+			mcp.Required(),
+			mcp.Description("消息内容"),
+		),
+		mcp.WithString("msg_type",
+			mcp.Description("消息类型：text(文本), markdown, template_card(卡片消息)"),
+			mcp.DefaultString("text"),
+		),
+		mcp.WithString("title",
+			mcp.Description("消息标题，用于markdown和template_card类型"),
+		),
+		mcp.WithString("webhook_url",
+			mcp.Description("企业微信机器人Webhook地址，如不提供则使用WECHAT_WEBHOOK_URL环境变量"),
+		),
+		mcp.WithString("card_type",
+			mcp.Description("卡片类型，用于template_card类型消息，默认为text_notice"),
+			mcp.DefaultString("text_notice"),
+		),
+	), k8s.SendWeChatMessageTool)
 
 	// 启动服务器
 	fmt.Printf("正在启动MCP服务器，监听地址: %s\n", address)
