@@ -15,7 +15,8 @@ MCP-DevOps 是一个基于 Go 语言开发的 Kubernetes 资源管理系统，�
 - **Deployment 管理**：列出、描述、扩缩容、重启 Deployment
 - **Service 管理**：列出、描述 Service
 - **Namespace 管理**：列出、描述、创建、删除 Namespace
-- **企业微信通知**：支持发送文本、Markdown和卡片类型的企业微信消息
+- **企业微信通知**：支持发送文本、Markdown和卡片类型的企业微信消息。默认文本消息会自动转换为带颜色和时间戳的 Markdown 格式。
+- **Alertmanager Webhook 集成**：客户端内置 Webhook 监听器（默认端口 9094），可接收 Alertmanager 告警，交由 AI 分析并通过企业微信发送通知。
 - **自然语言交互**：通过自然语言描述你想执行的操作
 - **中文支持**：系统默认使用中文进行交互
 
@@ -61,7 +62,7 @@ cd client
 go run main.go
 ```
 
-客户端启动后，会连接到服务器并提供命令行交互界面。
+客户端启动后，会连接到服务器并提供命令行交互界面。同时，它会在后台启动一个 Webhook 监听器（默认监听 `http://localhost:9094/webhook`）用于接收 Alertmanager 告警。
 
 ## 使用示例
 
@@ -108,4 +109,5 @@ mcp-devops/
 - 客户端需要使用大语言模型 API，请确保 OPENAI_API_KEY 有效
 - 如果在集群外运行服务器，请确保正确配置了 kubeconfig
 - 默认配置使用阿里通义模型 API，可以根据需要更换为其他 API
-- 企业微信通知功能需要配置有效的企业微信群机器人 Webhook URL 
+- 企业微信通知功能需要配置有效的企业微信群机器人 Webhook URL
+- 如需使用 Alertmanager 告警集成，请配置 Alertmanager 将告警发送到客户端运行机器的 `http://<client-ip>:9094/webhook` 地址。
