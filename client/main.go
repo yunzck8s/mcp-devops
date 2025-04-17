@@ -161,7 +161,7 @@ func (app *Application) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// **明确指示 AI 使用工具发送到企业微信**
-	promptBuilder.WriteString("\n请对上述告警进行分析总结，并使用【发送企业微信消息】工具将分析结果发送出去。")
+	promptBuilder.WriteString("\n请对上述告警进行分析总结，在告警中含有信息，你可以先去查看对应资源的日志和事件，仔细分析之后 ，再使用【发送企业微信消息】工具将分析结果发送出去。")
 	// --- Prompt 构造结束 ---
 
 	// 将构造好的 prompt 发送到通道
