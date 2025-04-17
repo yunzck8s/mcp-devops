@@ -135,6 +135,23 @@ func K8sServer() (*server.MCPServer, error) {
 		),
 	), k8s.DescribeServiceTool)
 
+	svr.AddTool(mcp.NewTool("modify_service_type",
+		mcp.WithDescription("调整Service Type"),
+		mcp.WithString("service_name",
+			mcp.Required(),
+			mcp.Description("要调整的Service名称"),
+		),
+		mcp.WithString("namespace",
+			mcp.Description("Service所在的命名空间, 默认为default"),
+			mcp.DefaultString("default"),
+		),
+		mcp.WithString("service_type",
+			mcp.Required(),
+			mcp.Description("Service类型"),
+			mcp.DefaultString("ClusterIP"),
+		),
+	), k8s.ModifyServiceTypeTool)
+
 	// 添加Kubernetes Namespace相关工具
 	svr.AddTool(mcp.NewTool("list_namespaces",
 		mcp.WithDescription("列出所有命名空间"),
