@@ -111,31 +111,32 @@ func (app *Application) Initialize() error {
 		Role: schema.System,
 		Content: `
 	作为云原生容器管理助手，你必须始终回复中文并且严格遵守以下规则：
-	
+
 	# 系统能力
 	你可以管理Kubernetes资源，包括：
 	- Kubernetes: Pod、Deployment、Service、命名空间等资源管理
-	
+
 	# 命令规则
 	0. 记住永远不能一次执行多个命令，你应该执行一个命令等待结果后才执行下一个命令
 	  不要使用会持续产生输出的命令
-	
+
 	1. 生成命令前必须：
 	  - 检查危险操作（删除、清理等）
 	  - 确认命令格式符合Windows要求，不要使用|或者grep等unix才有的命令
 	  - 危险命令必须按此格式确认："【安全提示】即将执行：xxx，是否继续？(Y/N)"
-	
+
 	2. Kubernetes命令规则：
 	  - 不要手动构造kubectl命令，使用提供的MCP工具，只有在真正无法实现的时候可以执行
 	  - 操作前先检查相关资源是否存在
 	  - 命名空间敏感操作需要先确认命名空间
 	  - 删除资源操作需要二次确认
-	
+
 	3. 错误处理原则：
 	  - 当命令执行失败时，用普通用户能理解的方式解释错误
 	  - 不要尝试自动修复需要权限的操作
 	  - 提供可能的解决方案
-	
+	  - **如果收到系统发送的错误信息，你应该分析错误原因，并尝试提出修复建议。**
+
 	4. 关于操作超时：
 	  - 执行stop、restart、remove等操作时可能需要较长时间
 	  - 如果执行命令后长时间没有响应，可能是服务器处理超时
@@ -144,16 +145,13 @@ func (app *Application) Initialize() error {
 	  - 有时候用户只会输入pod名称中去除随机生成的内容，你要能识别出来
 	  - 如果要查看pod或者容器日志，你应该知道pod中有哪些容器，哪个容器是用户想要的
 	  - 有时候用户给的pod名称不全，你需要自己判断是否存在名称相近的pod
-	
+
 	示例对话：
 	用户：删除所有停止的容器
 	你：【安全提示】即将执行：docker system prune -a，这将删除所有未使用的容器、镜像和网络，是否继续？(Y/N)
-	
+
 	用户：查看所有的Kubernetes命名空间
 	你：我将获取所有Kubernetes命名空间列表。
-	
-	用户：查看default命名空间中的所有Pod
-	你：我将获取default命名空间中的所有Pod列表。
 	`,
 	})
 
@@ -388,7 +386,15 @@ func (app *Application) processCommand(message string) bool {
 					fmt.Println("AI: 很抱歉，连接服务器时出现问题，正在尝试重新连接，请稍后再试。")
 					return false
 				}
-
+				//// 输出AI回应
+				//output := out.Content
+				//fmt.Println("AI: " + output)
+				//
+				//// 添加AI回复到对话历史
+				//app.dialog = append(app.dialog, &schema.Message{
+				//	Role:    schema.Assistant,
+				//	Content: output,
+				//})
 				// 检查是否是工具执行超时问题
 				if isToolTimeoutError(generateErr) {
 					fmt.Printf("\n[系统] 工具执行超时: %v\n", generateErr)

@@ -15,6 +15,7 @@ MCP-DevOps 是一个基于 Go 语言开发的 Kubernetes 资源管理系统，�
 - **Deployment 管理**：列出、描述、扩缩容、重启 Deployment
 - **Service 管理**：列出、描述 Service
 - **Namespace 管理**：列出、描述、创建、删除 Namespace
+- **企业微信通知**：支持发送文本、Markdown和卡片类型的企业微信消息
 - **自然语言交互**：通过自然语言描述你想执行的操作
 - **中文支持**：系统默认使用中文进行交互
 
@@ -39,6 +40,9 @@ MCP_SERVER_URL=http://127.0.0.1:12345/sse
 OPENAI_API_KEY=your-openai-api-key
 OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 OPENAI_MODEL=qwen-max
+
+# 企业微信配置
+WECHAT_WEBHOOK_URL=https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=your-webhook-key
 ```
 
 ### 启动服务器
@@ -68,6 +72,7 @@ go run main.go
 - 查看特定 Pod 的详细信息：`描述 pod-name 这个 Pod`
 - 查看 Pod 日志：`查看 pod-name 的日志`
 - 扩展 Deployment：`将 deployment-name 扩展到 3 个副本`
+- 发送企业微信通知：`发送企业微信消息"Kubernetes集群重启完成"`
 
 ## 安全注意事项
 
@@ -102,4 +107,5 @@ mcp-devops/
 
 - 客户端需要使用大语言模型 API，请确保 OPENAI_API_KEY 有效
 - 如果在集群外运行服务器，请确保正确配置了 kubeconfig
-- 默认配置使用阿里通义模型 API，可以根据需要更换为其他 API 
+- 默认配置使用阿里通义模型 API，可以根据需要更换为其他 API
+- 企业微信通知功能需要配置有效的企业微信群机器人 Webhook URL 
