@@ -2,7 +2,9 @@ package k8s
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"k8s.io/apimachinery/pkg/types"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -237,6 +239,75 @@ func DescribeServiceTool(ctx context.Context, request mcp.CallToolRequest) (*mcp
 					event.InvolvedObject.Kind+"/"+event.InvolvedObject.Name,
 					event.Message))
 			}
+		}
+	}
+
+	return mcp.NewToolResultText(result.String()), nil
+}
+
+// ModifyServiceTypeTool 调整Service类型的工具函数
+func ModifyServiceTypeTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	serviceName := request.Params.Arguments["service_name"].(string)
+	namespace, _ := request.Params.Arguments["namespace"].(string)
+	serviceType, _ := request.Params.Arguments["service_type"].(string)
+
+	fmt.Println("入参: modify_service_type, service_name=", serviceName, ", namespace=", namespace, ", serviceType=", serviceType)
+
+	if namespace == "" {
+		namespace = "default"
+	}
+	if serviceType == "" {
+		serviceType = "ClusterIP"
+	}
+
+	fmt.Println("ai 正在调用mcp server的tool: modify_service_type, service_name=", serviceName, ", namespace=", namespace, ", serviceType=", serviceType)
+
+	// 创建K8s客户端
+	clientset, err := CreateK8sClient()
+	if err != nil {
+		return mcp.NewToolResultText(fmt.Sprintf("创建Kubernetes客户端失败: %v", err)), err
+	}
+
+	// 限制只能ClusterIP & NodePort
+	validTypes := map[string]bool{
+		"ClusterIP": true,
+		"NodePort":  true,
+	}
+
+	if !validTypes[serviceType] {
+		return mcp.NewToolResultText(fmt.Sprintf("不支持的 Service Type: %s（仅支持 ClusterIP 或 NodePort）", serviceType)), fmt.Errorf("invalid service type: %s", serviceType)
+	}
+
+	// 根据传入参数调整指定名称空间下的Service对应的ServiceType
+	patch := map[string]interface{}{
+		"spec": map[string]interface{}{
+			"type": serviceType,
+		},
+	}
+
+	patchBytes, _ := json.Marshal(patch)
+
+	_, err = clientset.CoreV1().Services(namespace).Patch(ctx, serviceName, types.MergePatchType, patchBytes, metav1.PatchOptions{})
+	if err != nil {
+		return mcp.NewToolResultText(fmt.Sprintf("调整Service Type失败: %v", err)), err
+	}
+
+	// 重新获取 Service获取最新数据
+	service, err := clientset.CoreV1().Services(namespace).Get(ctx, serviceName, metav1.GetOptions{})
+	if err != nil {
+		return mcp.NewToolResultText(fmt.Sprintf("获取更新后的 Service 失败: %v", err)), err
+	}
+
+	// 格式化输出
+	var result strings.Builder
+	result.WriteString(fmt.Sprintf("Name:              %s\n", service.Name))
+	result.WriteString(fmt.Sprintf("Namespace:         %s\n", service.Namespace))
+	result.WriteString(fmt.Sprintf("Type:              %s\n", service.Spec.Type))
+
+	if serviceType == "NodePort" {
+		for _, port := range service.Spec.Ports {
+			result.WriteString(fmt.Sprintf("Port: %d -> TargetPort: %v -> NodePort: %d (%s)\n",
+				port.Port, port.TargetPort.String(), port.NodePort, port.Protocol))
 		}
 	}
 
