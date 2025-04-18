@@ -10,7 +10,7 @@
 *.pyc
 *.pyo
 *.pyd
-
+.vscode
 # Archives #
 ############
 *.7z
