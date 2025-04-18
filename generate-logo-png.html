@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP-DevOps Logo Generator</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f5f5f5;
+        }
+        .container {
+            text-align: center;
+            max-width: 800px;
+        }
+        .logo-container {
+            margin: 20px 0;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        button {
+            background-color: #326ce5;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 0 10px;
+        }
+        button:hover {
+            background-color: #2857b8;
+        }
+        #canvas {
+            display: none;
+        }
+        .instructions {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-top: 20px;
+            text-align: left;
+        }
+        .instructions h2 {
+            color: #326ce5;
+            margin-top: 0;
+        }
+        .instructions ol {
+            padding-left: 20px;
+        }
+        .instructions li {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>MCP-DevOps Logo Generator</h1>
+        
+        <div class="logo-container">
+            <svg id="logo" width="500" height="500" viewBox="0 0 500 500" xmlns="http://www.w3.org/2000/svg">
+                <!-- Background circle -->
+                <circle cx="250" cy="250" r="240" fill="#f8f9fa" stroke="#e9ecef" stroke-width="2"/>
+                
+                <!-- Kubernetes wheel symbol (modified) -->
+                <g transform="translate(250, 250) scale(0.85)">
+                    <!-- Outer ring -->
+                    <circle cx="0" cy="0" r="170" fill="none" stroke="#326ce5" stroke-width="20"/>
+                    
+                    <!-- Inner spokes (simplified from Kubernetes logo) -->
+                    <g stroke="#326ce5" stroke-width="20" stroke-linecap="round">
+                        <!-- Vertical spoke -->
+                        <line x1="0" y1="-170" x2="0" y2="-100" />
+                        <line x1="0" y1="100" x2="0" y2="170" />
+                        
+                        <!-- Horizontal spoke -->
+                        <line x1="-170" y1="0" x2="-100" y2="0" />
+                        <line x1="100" y1="0" x2="170" y2="0" />
+                        
+                        <!-- Diagonal spokes -->
+                        <line x1="-120" y1="-120" x2="-70" y2="-70" />
+                        <line x1="120" y1="-120" x2="70" y2="-70" />
+                        <line x1="-120" y1="120" x2="-70" y2="70" />
+                        <line x1="120" y1="120" x2="70" y2="70" />
+                    </g>
+                    
+                    <!-- Center circle -->
+                    <circle cx="0" cy="0" r="40" fill="#326ce5"/>
+                </g>
+                
+                <!-- Command line / Chat interface representation -->
+                <g transform="translate(250, 250)">
+                    <rect x="-80" y="-25" width="160" height="50" rx="10" ry="10" fill="#34a853" opacity="0.9"/>
+                    <text x="0" y="8" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="white" text-anchor="middle">MCP</text>
+                </g>
+                
+                <!-- DevOps infinity symbol -->
+                <g transform="translate(250, 330) scale(0.7)">
+                    <path d="M-80,0 C-80,-44.1 -44.1,-80 0,-80 C44.1,-80 80,-44.1 80,0 C80,44.1 44.1,80 0,80 C-44.1,80 -80,44.1 -80,0 Z M0,-40 C-22.1,-40 -40,-22.1 -40,0 C-40,22.1 -22.1,40 0,40 C22.1,40 40,22.1 40,0 C40,-22.1 22.1,-40 0,-40 Z" 
+                          fill="#4285f4" opacity="0.9"/>
+                </g>
+                
+                <!-- WeChat/Message icon -->
+                <g transform="translate(250, 170) scale(0.6)">
+                    <rect x="-60" y="-30" width="120" height="60" rx="30" ry="30" fill="#fbbc05" opacity="0.9"/>
+                    <circle cx="-25" cy="0" r="8" fill="white"/>
+                    <circle cx="0" cy="0" r="8" fill="white"/>
+                    <circle cx="25" cy="0" r="8" fill="white"/>
+                </g>
+                
+                <!-- Text: DevOps -->
+                <text x="250" y="390" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#4285f4" text-anchor="middle">DevOps</text>
+            </svg>
+        </div>
+        
+        <div class="controls">
+            <button id="download-png">下载 PNG 格式 Logo</button>
+            <button id="download-svg">下载 SVG 格式 Logo</button>
+        </div>
+        
+        <canvas id="canvas" width="500" height="500"></canvas>
+        
+        <div class="instructions">
+            <h2>使用说明</h2>
+            <ol>
+                <li><strong>查看 Logo</strong>: 页面加载后即可查看 MCP-DevOps 的 Logo。</li>
+                <li><strong>下载 PNG 格式</strong>: 点击"下载 PNG 格式 Logo"按钮，将以 PNG 格式下载 Logo 图片。</li>
+                <li><strong>下载 SVG 格式</strong>: 点击"下载 SVG 格式 Logo"按钮，将以 SVG 格式下载 Logo 图片。</li>
+                <li><strong>Logo 设计说明</strong>: 
+                    <ul>
+                        <li>蓝色轮形图案代表 Kubernetes</li>
+                        <li>绿色矩形中的 MCP 代表 Model Context Protocol</li>
+                        <li>蓝色无限符号代表 DevOps 的持续集成与部署</li>
+                        <li>黄色消息图标代表企业微信通知功能</li>
+                    </ul>
+                </li>
+            </ol>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 获取 SVG 元素
+            const svgElement = document.getElementById('logo');
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // 下载 PNG 格式
+            document.getElementById('download-png').addEventListener('click', function() {
+                // 将 SVG 转换为 PNG
+                const svgData = new XMLSerializer().serializeToString(svgElement);
+                const img = new Image();
+                
+                img.onload = function() {
+                    // 清除画布
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    // 绘制图像
+                    ctx.drawImage(img, 0, 0);
+                    
+                    // 转换为 PNG 并下载
+                    const pngData = canvas.toDataURL('image/png');
+                    const downloadLink = document.createElement('a');
+                    downloadLink.href = pngData;
+                    downloadLink.download = 'mcp-devops-logo.png';
+                    document.body.appendChild(downloadLink);
+                    downloadLink.click();
+                    document.body.removeChild(downloadLink);
+                };
+                
+                img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+            });
+            
+            // 下载 SVG 格式
+            document.getElementById('download-svg').addEventListener('click', function() {
+                const svgData = new XMLSerializer().serializeToString(svgElement);
+                const svgBlob = new Blob([svgData], {type: 'image/svg+xml;charset=utf-8'});
+                const svgUrl = URL.createObjectURL(svgBlob);
+                const downloadLink = document.createElement('a');
+                downloadLink.href = svgUrl;
+                downloadLink.download = 'mcp-devops-logo.svg';
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                document.body.removeChild(downloadLink);
+                URL.revokeObjectURL(svgUrl);
+            });
+        });
+    </script>
+</body>
+</html>
