@@ -177,8 +177,6 @@ public/ # 如果是构建输出目录 (e.g., Webpack)
 ###################################################
 .env*
 !.env.example # 通常 .env.example 是安全的模板文件，可以提交
-secrets.*
-secret*
 *.pem
 *.key
 credentials*
