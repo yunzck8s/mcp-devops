@@ -23,6 +23,7 @@ import (
 	// 本地包导入
 	"mcp-devops/client/pkg/mcp"
 	"mcp-devops/client/pkg/model"
+	modelEino "github.com/cloudwego/eino/components/model"
 )
 
 // Alertmanager webhook 结构体定义
@@ -314,15 +315,27 @@ func (app *Application) updateToolsWithContext(ctx context.Context, verbose bool
 
 	app.lastUpdateTime = time.Now()
 
-	// 初始化聊天模型
-	cm := model.NewChatModel(
-		ctx, // 使用传入的上下文
-		os.Getenv("OPENAI_API_KEY"),
-		os.Getenv("OPENAI_BASE_URL"),
-		os.Getenv("OPENAI_MODEL"),
-	)
+	modelType := os.Getenv("MODEL_TYPE")
+	if modelType == "" {
+		modelType = "openai"
+	}
 
-	// 初始化代理
+	var cm modelEino.ChatModel
+	if modelType == "ollama" {
+		cm = model.NewOllamaModel(
+			ctx,
+			os.Getenv("OLLAMA_BASE_URL"),
+			os.Getenv("OLLAMA_MODEL"),
+		)
+	} else {
+		cm = model.NewChatModel(
+			ctx,
+			os.Getenv("OPENAI_API_KEY"),
+			os.Getenv("OPENAI_BASE_URL"),
+			os.Getenv("OPENAI_MODEL"),
+		)
+	}
+
 	app.runner, err = react.NewAgent(ctx, &react.AgentConfig{
 		Model: cm,
 		ToolsConfig: compose.ToolsNodeConfig{
