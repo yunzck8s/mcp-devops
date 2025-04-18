@@ -2,7 +2,7 @@
 
 [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/569/badge)](https://bestpractices.coreinfrastructure.org/projects/569) [![Go Report Card](https://goreportcard.com/badge/github.com/kubernetes/kubernetes)](https://goreportcard.com/report/github.com/kubernetes/kubernetes) ![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/kubernetes/kubernetes?sort=semver)
 
-<img src="logo.svg" width="300">
+<img src="logo.png" width="300">
 
 
 MCP-DevOps 是一个基于 Go 语言开发的 Kubernetes 资源管理系统，它提供了简单易用的命令行界面来管理 Kubernetes 集群资源。该系统使用客户端-服务器架构，通过语义化交互提供直观的操作方式。
