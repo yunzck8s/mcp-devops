@@ -1,8 +1,6 @@
 # MCP-DevOps Kubernetes 管理系统
 
-<div align="center">
-  <img src="mcp-devops-logo.png" alt="MCP-DevOps Logo" width="200" />
-</div>
+![MCP-DevOps Logo](logo.svg)
 
 MCP-DevOps 是一个基于 Go 语言开发的 Kubernetes 资源管理系统，它提供了简单易用的命令行界面来管理 Kubernetes 集群资源。该系统使用客户端-服务器架构，通过语义化交互提供直观的操作方式。
 
@@ -116,12 +114,6 @@ mcp-devops/
 - 企业微信通知功能需要配置有效的企业微信群机器人 Webhook URL
 - 如需使用 Alertmanager 告警集成，请配置 Alertmanager 将告警发送到客户端运行机器的 `http://<client-ip>:9094/webhook` 地址。
 
-## Logo 使用说明
-
-项目包含以下与 Logo 相关的文件：
-
-1. **mcp-devops-logo.html**: 包含 MCP-DevOps Logo 的 HTML 文件，可以直接在浏览器中打开查看。
-2. **generate-logo-png.html**: Logo 生成工具，可以在浏览器中打开并下载 PNG 或 SVG 格式的 Logo。
 
 ### Logo 设计说明
 
