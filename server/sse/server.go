@@ -4,6 +4,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"mcp-devops/server/k8s"
+	"mcp-devops/server/linux"
 )
 
 func K8sServer() (*server.MCPServer, error) {

@@ -68,9 +68,8 @@ func ListIngressesTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 
 		// 获取端口列表
 		var ports []string
-		for _, tls := range ing.Spec.TLS {
+		if len(ing.Spec.TLS) > 0 {
 			ports = append(ports, "443")
-			break
 		}
 		// 检查是否有HTTP规则
 		for _, rule := range ing.Spec.Rules {
@@ -169,7 +168,7 @@ func DescribeIngressTool(ctx context.Context, request mcp.CallToolRequest) (*mcp
 				for j, path := range rule.HTTP.Paths {
 					result.WriteString(fmt.Sprintf("      Path-%d:\n", j+1))
 					result.WriteString(fmt.Sprintf("        Path:     %s\n", path.Path))
-					result.WriteString(fmt.Sprintf("        PathType: %s\n", string(path.PathType)))
+					result.WriteString(fmt.Sprintf("        PathType: %s\n", string(*path.PathType)))
 					result.WriteString("        Backend:\n")
 					if path.Backend.Service != nil {
 						result.WriteString(fmt.Sprintf("          Service Name: %s\n", path.Backend.Service.Name))

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -59,7 +58,7 @@ func ContainerRuntimeStatusTool(ctx context.Context, request mcp.CallToolRequest
 	// 构建命令
 	var commands []string
 	var serviceName string
-	
+
 	switch strings.ToLower(runtime) {
 	case "docker":
 		serviceName = "docker"
@@ -70,13 +69,13 @@ func ContainerRuntimeStatusTool(ctx context.Context, request mcp.CallToolRequest
 	default:
 		serviceName = runtime
 	}
-	
+
 	if hostname != "" {
 		commands = []string{
 			fmt.Sprintf("ssh %s 'systemctl status %s'", hostname, serviceName),
 			fmt.Sprintf("ssh %s 'journalctl -u %s --no-pager -n 30'", hostname, serviceName),
 		}
-		
+
 		// 添加特定于运行时的命令
 		switch strings.ToLower(runtime) {
 		case "docker":
@@ -94,7 +93,7 @@ func ContainerRuntimeStatusTool(ctx context.Context, request mcp.CallToolRequest
 			fmt.Sprintf("systemctl status %s", serviceName),
 			fmt.Sprintf("journalctl -u %s --no-pager -n 30", serviceName),
 		}
-		
+
 		// 添加特定于运行时的命令
 		switch strings.ToLower(runtime) {
 		case "docker":
@@ -246,7 +245,7 @@ func CNIStatusTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallT
 			fmt.Sprintf("ssh %s 'ls -la /etc/cni/net.d/'", hostname),
 			fmt.Sprintf("ssh %s 'cat /etc/cni/net.d/*.conf'", hostname),
 		}
-		
+
 		// 根据CNI类型添加特定命令
 		if cniType != "" {
 			switch strings.ToLower(cniType) {
@@ -270,7 +269,7 @@ func CNIStatusTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallT
 			"ls -la /etc/cni/net.d/",
 			"cat /etc/cni/net.d/*.conf",
 		}
-		
+
 		// 根据CNI类型添加特定命令
 		if cniType != "" {
 			switch strings.ToLower(cniType) {
@@ -318,7 +317,7 @@ func KubeComponentLogsTool(ctx context.Context, request mcp.CallToolRequest) (*m
 	if component == "" {
 		component = "kubelet" // 默认组件
 	}
-	
+
 	lines, _ := request.Params.Arguments["lines"].(float64)
 	if lines == 0 {
 		lines = 50 // 默认行数
@@ -354,10 +353,10 @@ func KubeComponentLogsTool(ctx context.Context, request mcp.CallToolRequest) (*m
 		errorCommand = fmt.Sprintf("journalctl -u %s --no-pager | grep -i \"error\" | wc -l", component)
 		warnCommand = fmt.Sprintf("journalctl -u %s --no-pager | grep -i \"warn\" | wc -l", component)
 	}
-	
+
 	errorCount, err1 := executeCommand(errorCommand)
 	warnCount, err2 := executeCommand(warnCommand)
-	
+
 	if err1 == nil && err2 == nil {
 		result.WriteString("\n日志统计:\n")
 		result.WriteString(fmt.Sprintf("  错误 (Error) 数量: %s", errorCount))
@@ -380,7 +379,7 @@ func ContainerInspectTool(ctx context.Context, request mcp.CallToolRequest) (*mc
 
 	// 构建命令
 	var commands []string
-	
+
 	switch strings.ToLower(runtime) {
 	case "docker":
 		if hostname != "" {

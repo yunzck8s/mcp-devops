@@ -172,17 +172,37 @@ go run main.go
 </details>
 
 <details open>
-<summary><span style="color:#e74c3c; font-weight:bold;">🖥️ 启动客户端</span></summary>
+<summary><span style="color:#e74c3c; font-weight:bold;">🖥️ 启动命令行客户端</span></summary>
 
 ```bash
 cd client
 go run main.go
 ```
 
-客户端启动后，会连接到服务器并提供命令行交互界面。同时，它会在后台启动一个 Webhook 监听器（默认监听 `http://localhost:9094/webhook`）用于接收 Alertmanager 告警。
+命令行客户端启动后，会连接到服务器并提供命令行交互界面。同时，它会在后台启动一个 Webhook 监听器（默认监听 `http://localhost:9094/webhook`）用于接收 Alertmanager 告警。
 
 <div style="background-color: #f8f9fa; border-left: 4px solid #3498db; padding: 10px; margin: 10px 0;">
   <span style="color:#3498db">🔔 注意：</span> 首次启动时，客户端会尝试连接服务器并获取可用工具列表。如果连接失败，将自动重试。
+</div>
+</details>
+
+<details open>
+<summary><span style="color:#9b59b6; font-weight:bold;">🌐 启动 Web 客户端</span></summary>
+
+```bash
+cd client/web
+npm install
+npm run dev
+```
+
+Web 客户端将在 http://localhost:3000 启动，提供现代化的 Web 界面来与 AI 助手交互。
+
+<div style="background-color: #f8f9fa; border-left: 4px solid #9b59b6; padding: 10px; margin: 10px 0;">
+  <span style="color:#9b59b6">✨ 特性：</span> Web 客户端提供了用户认证、聊天界面、深色/浅色模式切换、响应式设计和告警管理功能。
+</div>
+
+<div style="background-color: #f8f9fa; border-left: 4px solid #f39c12; padding: 10px; margin: 10px 0;">
+  <span style="color:#f39c12">🔑 登录：</span> 使用默认账号 <code>admin</code> / <code>admin123</code> 登录系统。
 </div>
 </details>
 

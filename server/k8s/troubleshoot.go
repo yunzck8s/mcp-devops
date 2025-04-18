@@ -2,18 +2,13 @@ package k8s
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
-
 	"github.com/mark3labs/mcp-go/mcp"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
-	metrics "k8s.io/metrics-server/pkg/client/clientset/versioned"
 )
 
 // ClusterHealthTool 获取集群健康状态的工具函数
@@ -912,15 +907,6 @@ func AlertAnalysisTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 func getEventsForNode(ctx context.Context, clientset *kubernetes.Clientset, node *corev1.Node) (*corev1.EventList, error) {
 	fieldSelector := fmt.Sprintf("involvedObject.kind=Node,involvedObject.name=%s", node.Name)
 	return clientset.CoreV1().Events("").List(ctx, metav1.ListOptions{
-		FieldSelector: fieldSelector,
-	})
-}
-
-// 辅助函数：获取Deployment相关事件
-func getEventsForDeployment(ctx context.Context, clientset *kubernetes.Clientset, deployment *appsv1.Deployment) (*corev1.EventList, error) {
-	fieldSelector := fmt.Sprintf("involvedObject.kind=Deployment,involvedObject.name=%s,involvedObject.namespace=%s",
-		deployment.Name, deployment.Namespace)
-	return clientset.CoreV1().Events(deployment.Namespace).List(ctx, metav1.ListOptions{
 		FieldSelector: fieldSelector,
 	})
 }
