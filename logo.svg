@@ -1,57 +1,47 @@
-<svg viewBox="0 0 500 500" xmlns="http://www.w3.org/2000/svg">
-    <!-- Background circle -->
-    <circle cx="250" cy="250" r="240" fill="#f8f9fa" stroke="#e9ecef" stroke-width="2"/>
+<svg viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <circle cx="120" cy="120" r="110" fill="#f8f9fa" stroke="#e9ecef" stroke-width="1"/>
+  
+  <!-- Kubernetes wheel (simplified and modernized) -->
+  <g transform="translate(120, 120) scale(0.5)">
+    <circle cx="0" cy="0" r="140" fill="none" stroke="#326ce5" stroke-width="18" stroke-dasharray="0"/>
     
-    <!-- Kubernetes wheel symbol (modified) -->
-    <g transform="translate(250, 250) scale(0.85)">
-        <!-- Outer ring -->
-        <circle cx="0" cy="0" r="170" fill="none" stroke="#326ce5" stroke-width="20"/>
-        
-        <!-- Inner spokes (simplified from Kubernetes logo) -->
-        <g stroke="#326ce5" stroke-width="20" stroke-linecap="round">
-            <!-- Vertical spoke -->
-            <line x1="0" y1="-170" x2="0" y2="-100" />
-            <line x1="0" y1="100" x2="0" y2="170" />
-            
-            <!-- Horizontal spoke -->
-            <line x1="-170" y1="0" x2="-100" y2="0" />
-            <line x1="100" y1="0" x2="170" y2="0" />
-            
-            <!-- Diagonal spokes -->
-            <line x1="-120" y1="-120" x2="-70" y2="-70" />
-            <line x1="120" y1="-120" x2="70" y2="-70" />
-            <line x1="-120" y1="120" x2="-70" y2="70" />
-            <line x1="120" y1="120" x2="70" y2="70" />
-        </g>
-        
-        <!-- Center circle -->
-        <circle cx="0" cy="0" r="40" fill="#326ce5"/>
+    <!-- Simplified spokes -->
+    <g stroke="#326ce5" stroke-width="18" stroke-linecap="round">
+      <line x1="0" y1="-140" x2="0" y2="-80" />
+      <line x1="0" y1="80" x2="0" y2="140" />
+      <line x1="-140" y1="0" x2="-80" y2="0" />
+      <line x1="80" y1="0" x2="140" y2="0" />
+      <line x1="-100" y1="-100" x2="-55" y2="-55" />
+      <line x1="100" y1="-100" x2="55" y2="-55" />
+      <line x1="-100" y1="100" x2="-55" y2="55" />
+      <line x1="100" y1="100" x2="55" y2="55" />
     </g>
     
-    <!-- Command line / Chat interface representation -->
-    <g transform="translate(250, 250)">
-        <rect x="-80" y="-25" width="160" height="50" rx="10" ry="10" fill="#34a853" opacity="0.9"/>
-        <text x="0" y="8" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="white" text-anchor="middle">MCP</text>
-    </g>
+    <circle cx="0" cy="0" r="35" fill="#326ce5"/>
+  </g>
+  
+  <!-- MCP Tag -->
+  <g transform="translate(120, 120)">
+    <rect x="-42" y="-15" width="84" height="30" rx="8" ry="8" fill="#34a853" opacity="0.95"/>
+    <text x="0" y="5" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white" text-anchor="middle" dominant-baseline="middle">MCP</text>
+  </g>
+  
+  <!-- Message icon (simplified) -->
+  <g transform="translate(120, 85) scale(0.35)">
+    <rect x="-50" y="-25" width="100" height="50" rx="25" ry="25" fill="#fbbc05" opacity="0.95"/>
+    <circle cx="-20" cy="0" r="7" fill="white"/>
+    <circle cx="0" cy="0" r="7" fill="white"/>
+    <circle cx="20" cy="0" r="7" fill="white"/>
+  </g>
+  
+  <!-- DevOps with infinity symbol -->
+  <g transform="translate(120, 155)">
+    <!-- Infinity symbol -->
+    <path d="M-25,0 C-25,-10 -15,-18 -5,-18 C5,-18 10,-10 10,0 C10,10 5,18 -5,18 C-15,18 -25,10 -25,0 Z M10,-18 C20,-18 25,-10 25,0 C25,10 20,18 10,18 C0,18 -5,10 -5,0 C-5,-10 0,-18 10,-18 Z" 
+          fill="#4285f4" opacity="0.95"/>
     
-    <!-- DevOps infinity symbol -->
-    <g transform="translate(250, 330) scale(0.7)">
-        <path d="M-80,0 C-80,-44.1 -44.1,-80 0,-80 C44.1,-80 80,-44.1 80,0 C80,44.1 44.1,80 0,80 C-44.1,80 -80,44.1 -80,0 Z M0,-40 C-22.1,-40 -40,-22.1 -40,0 C-40,22.1 -22.1,40 0,40 C22.1,40 40,22.1 40,0 C40,-22.1 22.1,-40 0,-40 Z" 
-              fill="#4285f4" opacity="0.9"/>
-    </g>
-    
-    <!-- WeChat/Message icon -->
-    <g transform="translate(250, 170) scale(0.6)">
-        <rect x="-60" y="-30" width="120" height="60" rx="30" ry="30" fill="#fbbc05" opacity="0.9"/>
-        <circle cx="-25" cy="0" r="8" fill="white"/>
-        <circle cx="0" cy="0" r="8" fill="white"/>
-        <circle cx="25" cy="0" r="8" fill="white"/>
-    </g>
-    
-    <!-- Text: DevOps -->
-    <text x="250" y="390" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#4285f4" text-anchor="middle">DevOps</text>
-    
-    <!-- Title and description -->
-    <text x="250" y="430" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#333" text-anchor="middle">MCP-DevOps Kubernetes 管理系统</text>
-    <text x="250" y="455" font-family="Arial, sans-serif" font-size="10" fill="#666" text-anchor="middle">基于 Go 语言开发的 Kubernetes 资源管理系统，提供简单易用的命令行界面和自然语言交互能力</text>
+    <!-- DevOps text -->
+    <text x="0" y="30" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#4285f4" text-anchor="middle">DevOps</text>
+  </g>
 </svg>
