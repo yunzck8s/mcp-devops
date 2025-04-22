@@ -3,8 +3,8 @@ package main
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"encoding/json" // 用于JSON编解码
+	"fmt"
 	"log"
 	"net/http" // 用于HTTP服务器
 	"os"
@@ -23,6 +23,7 @@ import (
 	// 本地包导入
 	"mcp-devops/client/pkg/mcp"
 	"mcp-devops/client/pkg/model"
+
 	modelEino "github.com/cloudwego/eino/components/model"
 )
 
@@ -162,7 +163,7 @@ func (app *Application) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// **明确指示 AI 使用工具发送到企业微信**
-	promptBuilder.WriteString("\n请对上述告警进行分析总结，在告警中含有信息，你可以先去查看对应资源的日志和事件，仔细分析之后 ，再使用【发送企业微信消息】工具将分析结果发送出去。")
+	promptBuilder.WriteString("\n请对上述告警进行分析总结，在告警中含有信息，你可以先结合当前的工具进行排查获取信息，仔细分析之后 ，再使用【发送企业微信消息】工具将分析结果发送出去。")
 	// --- Prompt 构造结束 ---
 
 	// 将构造好的 prompt 发送到通道
