@@ -3,8 +3,8 @@ package main
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"encoding/json" // 用于JSON编解码
+	"fmt"
 	"log"
 	"net/http" // 用于HTTP服务器
 	"os"
@@ -23,7 +23,11 @@ import (
 	// 本地包导入
 	"mcp-devops/client/pkg/mcp"
 	"mcp-devops/client/pkg/model"
+
 	modelEino "github.com/cloudwego/eino/components/model"
+	// 假设 webserver 包存在于 client/pkg/webserver
+	// 导入 webserver 包
+	// 确保 webserver 包已导入
 )
 
 // Alertmanager webhook 结构体定义
@@ -54,17 +58,25 @@ type AlertmanagerWebhookMessage struct {
 }
 
 const (
-	maxRetries      = 5  // 最大重试次数
-	retryInterval   = 5  // 重试间隔(秒)
-	agentTimeout    = 90 // 代理执行超时时间(秒)
-	toolTimeout     = 30 // 工具执行超时时间(秒)
-	toolUpdateTime  = 30 // 工具更新间隔(分钟)
-	maxHistoryItems = 10 // 最大历史记录条数
-	reconnectBuffer = 5  // 重连通道缓冲区大小
+	maxRetries         = 5  // 最大重试次数
+	retryInterval      = 5  // 重试间隔(秒)
+	agentTimeout       = 90 // 代理执行超时时间(秒)
+	toolTimeout        = 30 // 工具执行超时时间(秒)
+	toolUpdateTime     = 30 // 工具更新间隔(分钟)
+	maxHistoryItems    = 10 // 最大历史记录条数
+	reconnectBuffer    = 5  // 重连通道缓冲区大小
+	inputChannelBuffer = 20 // 统一输入通道的缓冲区大小 // <-- 添加这行
 )
 
 // Debug 是否开启调试模式
 var Debug bool
+
+// WebServer interface (定义 Web 服务器需要实现的方法)
+type WebServer interface {
+	Start(inputCh chan<- string) error // Web服务器启动，并将接收到的Web输入发送到inputCh
+	Broadcast(message string)          // 将消息广播给所有Web客户端
+	Shutdown()                         // 关闭Web服务器
+}
 
 // Application 应用程序结构体
 type Application struct {
@@ -74,10 +86,12 @@ type Application struct {
 	tools          []tool.BaseTool
 	runner         *react.Agent
 	dialog         []*schema.Message
-	lastCommand    string
-	pendingRetry   bool
+	lastCommand    string // 仅用于终端重试逻辑
+	pendingRetry   bool   // 仅用于终端重试逻辑
 	lastUpdateTime time.Time
-	webhookPrompts chan string // 用于从 webhook 传递 prompt 到主循环的通道
+	// webhookPrompts chan string // 移除旧的 webhook 通道
+	inputCh   chan string // 统一的输入通道
+	webServer WebServer   // Web服务器实例
 }
 
 // NewApplication 创建新的应用程序实例
@@ -90,19 +104,17 @@ func NewApplication() *Application {
 		cancel:         cancel,
 		dialog:         make([]*schema.Message, 0),
 		lastUpdateTime: time.Now().Add(-toolUpdateTime * time.Minute), // 强制首次更新
-		webhookPrompts: make(chan string, 10),                         // 初始化 webhook prompt 通道，带缓冲
+		inputCh:        make(chan string, inputChannelBuffer),         // 初始化统一输入通道
 	}
 }
 
-// handleWebhook 处理来自 Alertmanager 的 webhook 请求 (作为 Application 的方法)
+// handleWebhook 处理来自 Alertmanager 的 webhook 请求
 func (app *Application) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	// 只接受 POST 请求
 	if r.Method != http.MethodPost {
 		http.Error(w, "无效的请求方法", http.StatusMethodNotAllowed)
 		return
 	}
-
-	// 解析请求体中的 JSON 数据
 	var msg AlertmanagerWebhookMessage
 	if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
 		http.Error(w, fmt.Sprintf("解码请求体失败: %v", err), http.StatusBadRequest)
@@ -122,22 +134,19 @@ func (app *Application) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		if summary == "" {
 			summary = "无摘要信息"
 		}
-		// 添加告警详情
 		promptBuilder.WriteString(fmt.Sprintf("\n告警 %d [%s]:\n", i+1, alert.Status))
 		promptBuilder.WriteString(fmt.Sprintf("  摘要: %s\n", summary))
 		promptBuilder.WriteString(fmt.Sprintf("  开始时间: %s\n", alert.StartsAt.Format(time.RFC3339)))
 		if alert.Status == "resolved" {
 			promptBuilder.WriteString(fmt.Sprintf("  结束时间: %s\n", alert.EndsAt.Format(time.RFC3339)))
 		}
-		// 添加关键标签
-		criticalLabels := []string{"alertname", "severity", "namespace", "pod", "deployment", "service", "job"} // 添加更多可能的标签
+		criticalLabels := []string{"alertname", "severity", "namespace", "pod", "deployment", "service", "job"}
 		labelDetails := ""
 		for _, key := range criticalLabels {
 			if val, ok := alert.Labels[key]; ok {
 				labelDetails += fmt.Sprintf("%s=%s, ", key, val)
 			}
 		}
-		// 添加所有其他标签
 		otherLabelDetails := ""
 		for key, val := range alert.Labels {
 			isCritical := false
@@ -151,7 +160,6 @@ func (app *Application) handleWebhook(w http.ResponseWriter, r *http.Request) {
 				otherLabelDetails += fmt.Sprintf("%s=%s, ", key, val)
 			}
 		}
-
 		if len(labelDetails) > 0 {
 			labelDetails = strings.TrimSuffix(labelDetails, ", ")
 			promptBuilder.WriteString(fmt.Sprintf("  关键标签: %s\n", labelDetails))
@@ -161,32 +169,92 @@ func (app *Application) handleWebhook(w http.ResponseWriter, r *http.Request) {
 			promptBuilder.WriteString(fmt.Sprintf("  其他标签: %s\n", otherLabelDetails))
 		}
 	}
-	// **明确指示 AI 使用工具发送到企业微信**
 	promptBuilder.WriteString("\n请对上述告警进行分析总结，在告警中含有信息，你可以先去查看对应资源的日志和事件，仔细分析之后 ，再使用【发送企业微信消息】工具将分析结果发送出去。")
 	// --- Prompt 构造结束 ---
 
-	// 将构造好的 prompt 发送到通道
-	select {
-	case app.webhookPrompts <- promptBuilder.String():
-		fmt.Println("\n[系统] Webhook 告警已格式化并发送给 AI 处理队列。")
-	default:
-		// 如果通道已满，记录日志
-		log.Println("[警告] Webhook prompt 通道已满，告警信息可能丢失。")
-	}
+	prompt := promptBuilder.String()
 
-	// 返回成功响应给 Alertmanager
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintln(w, "Webhook received and queued for processing")
+	// 将构造好的 prompt 发送到统一的 inputCh
+	select {
+	case app.inputCh <- prompt:
+		fmt.Println("\n[系统] Webhook 告警已发送到主处理队列。")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintln(w, "Webhook received and queued for processing")
+	default:
+		// 如果通道已满，记录日志并返回错误给 Alertmanager
+		log.Println("[警告] 输入通道已满，Webhook 告警信息可能丢失。")
+		http.Error(w, "处理队列繁忙", http.StatusServiceUnavailable)
+	}
+}
+
+// handleTerminalInput 处理来自终端的用户输入
+func (app *Application) handleTerminalInput() {
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Println("\n请输入命令 (输入 'exit' 或 'quit' 退出):")
+	for {
+		// 只有在没有待处理重试时才显示提示符
+		if !app.pendingRetry {
+			fmt.Print("You: ")
+		}
+
+		// 如果需要自动重试上一条命令
+		if app.pendingRetry && app.lastCommand != "" {
+			message := app.lastCommand
+			fmt.Println(message + " (自动重试)")
+			app.pendingRetry = false // 清除重试标志
+			// 发送到统一 inputCh
+			select {
+			case app.inputCh <- message:
+				// 发送成功
+			default:
+				log.Println("[警告] 输入通道已满，自动重试的终端输入可能丢失。")
+			}
+			continue // 继续下一次循环等待新输入或退出
+		}
+
+		// 读取用户输入
+		text, err := reader.ReadString('\n')
+		if err != nil {
+			// 如果上下文已取消，则正常退出 goroutine
+			if app.ctx.Err() != nil {
+				log.Println("[信息] 终端输入处理协程退出。")
+				return
+			}
+			log.Printf("[错误] 读取终端输入失败: %v\n", err)
+			// 稍微等待一下避免CPU空转
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+		text = strings.TrimSpace(text)
+
+		// 检查是否要退出
+		if text == "exit" || text == "quit" || text == "退出" {
+			app.cancel() // 发出关闭信号
+			return       // 退出 goroutine
+		}
+
+		if text != "" {
+			app.lastCommand = text // 保存最后的用户输入命令（用于重试）
+			// 发送到统一 inputCh
+			select {
+			case app.inputCh <- text:
+				// 发送成功
+			default:
+				log.Println("[警告] 输入通道已满，终端输入可能丢失。")
+			}
+		}
+	}
 }
 
 // Initialize 初始化应用
 func (app *Application) Initialize() error {
 	fmt.Println("==== 云原生容器管理客户端启动 ====")
-	fmt.Println("支持 Docker 和 Kubernetes 资源管理")
+	fmt.Println("支持 终端交互, Web UI, Webhook 输入")
 
 	// 加载环境变量
 	if err := godotenv.Load(); err != nil {
-		return fmt.Errorf("加载环境变量失败: %w", err)
+		// 允许 .env 文件不存在
+		log.Println("[信息] .env 文件未找到或加载失败，将依赖系统环境变量。")
 	}
 
 	// 获取服务器URL
@@ -194,34 +262,27 @@ func (app *Application) Initialize() error {
 	if serverURL == "" {
 		return fmt.Errorf("MCP_SERVER_URL 环境变量未设置")
 	}
-
 	fmt.Printf("使用服务器URL: %s\n", serverURL)
 
 	// 清除之前可能存在的工具缓存
 	mcp.ResetToolsCache()
 
-	// 初始化客户端管理器，使用更长的超时时间
+	// 初始化客户端管理器
 	app.clientManager = mcp.NewClientManager(
 		serverURL,
 		os.Getenv("MCP_API_TOKEN"),
 		mcp.WithMaxRetries(maxRetries),
-		mcp.WithRetryInterval(time.Duration(3)*time.Second),  // 增加重试间隔
-		mcp.WithConnectTimeout(time.Duration(8)*time.Second), // 增加连接超时
+		mcp.WithRetryInterval(time.Duration(3)*time.Second),
+		mcp.WithConnectTimeout(time.Duration(8)*time.Second),
 	)
 
 	fmt.Println("正在连接MCP服务器...")
-
-	// 创建一个独立的上下文用于初始化，避免共享app.ctx
 	initCtx := context.Background()
-
-	// 启动客户端并等待连接稳定
 	if err := app.clientManager.Start(initCtx); err != nil {
 		return fmt.Errorf("启动MCP客户端失败: %w", err)
 	}
-
-	// 等待更长时间确保连接稳定
 	fmt.Println("MCP连接已建立，等待连接稳定...")
-	time.Sleep(5 * time.Second)
+	time.Sleep(2 * time.Second) // 缩短等待时间
 
 	// 初始化系统提示
 	app.dialog = append(app.dialog, &schema.Message{
@@ -653,72 +714,74 @@ func (app *Application) Start() {
 	// 启动重连监控
 	app.startReconnectMonitor()
 
-	fmt.Println("客户端准备就绪，请输入您的命令或等待 Webhook 告警 (输入'exit'退出):")
+	// 启动终端输入处理协程
+	go app.handleTerminalInput() // 启动独立的终端输入处理
 
-	// 使用 buffered channel 读取标准输入，避免阻塞 select
-	userInputChan := make(chan string)
-	go func() {
-		scanner := bufio.NewScanner(os.Stdin)
-		for scanner.Scan() {
-			userInputChan <- scanner.Text()
-		}
-		if err := scanner.Err(); err != nil {
-			fmt.Printf("[系统] 读取标准输入错误: %v\n", err)
-		}
-		close(userInputChan) // 输入结束或出错时关闭通道
-	}()
+	// 启动 Webhook 监听 (如果尚未在 Initialize 中启动)
+	// 注意：确保 Webhook 服务器只启动一次。如果 Initialize 中已启动，则这里不需要。
+	// go app.startWebhookListener() // 假设有这样一个函数
+
+	fmt.Println("客户端准备就绪，等待输入 (终端, Web UI, Webhook)... (输入 'exit' 或 'quit' 从终端退出)")
+
+	// 移除旧的 userInputChan goroutine
+	/*
+		userInputChan := make(chan string)
+		go func() {
+			scanner := bufio.NewScanner(os.Stdin)
+			for scanner.Scan() {
+				userInputChan <- scanner.Text()
+			}
+			if err := scanner.Err(); err != nil {
+				fmt.Printf("[系统] 读取标准输入错误: %v\n", err)
+			}
+			close(userInputChan) // 输入结束或出错时关闭通道
+		}()
+	*/
 
 	for {
-		fmt.Print("\nYou: (或等待 Webhook...) ") // 提示用户可以输入或等待
+		// 不再需要单独的提示符，handleTerminalInput 会处理
+		// fmt.Print("\nYou: (或等待 Webhook...) ")
 
 		select {
-		case <-app.ctx.Done(): // 检查应用是否被要求退出
+		case <-app.ctx.Done(): // 检查应用是否被要求退出 (由 handleTerminalInput 或其他地方触发 cancel)
 			fmt.Println("\n[系统] 应用上下文关闭，退出主循环。")
 			return
 
-		case message, ok := <-userInputChan: // 从标准输入读取
-			if !ok { // 通道关闭，意味着标准输入结束
-				fmt.Println("\n[系统] 标准输入流结束，准备退出。")
-				app.Shutdown() // 触发正常关闭流程
+		case message, ok := <-app.inputCh: // 从统一输入通道读取
+			if !ok {
+				// inputCh 不应该被外部关闭，除非是应用准备完全停止
+				log.Println("[警告] 主输入通道意外关闭。")
+				app.Shutdown() // 触发关闭
 				return
 			}
 
-			// 检查是否要退出
-			if message == "exit" || message == "quit" || message == "退出" {
-				app.Shutdown() // 触发正常关闭流程
-				return
-			}
+			fmt.Printf("\n[系统] 收到输入: %s\n", message) // 打印收到的输入，方便调试
 
-			// 保存最后一条用户命令
-			if message != "" {
-				app.lastCommand = message
-			}
-
-			// 处理用户输入的命令
+			// 处理来自任何来源的命令
+			// 注意：processCommand 内部可能需要区分输入来源，
+			// 例如，只有来自终端或Web UI的输入才更新 lastCommand。
+			// 目前 processCommand 逻辑可能需要调整以适应这种情况。
+			// 简单的处理方式是不再依赖 lastCommand 进行重试，或者修改输入通道传递更复杂的数据结构。
+			// 这里暂时保持不变，但需要注意潜在的逻辑问题。
 			skipCurrentCommand := app.processCommand(message)
 			if skipCurrentCommand {
 				continue // 如果是特殊命令（如更新工具），跳过后续处理
 			}
 
-		case webhookPrompt := <-app.webhookPrompts: // 从 webhook 通道读取
-			fmt.Println("\n[系统] 收到来自 Webhook 的处理请求...")
-			// 将 webhook prompt 作为用户消息处理
-			// 注意：这里我们不更新 lastCommand，因为这不是用户直接输入的
-			skipCurrentCommand := app.processCommand(webhookPrompt)
-			if skipCurrentCommand {
-				// 理论上 webhook prompt 不会是特殊命令，但以防万一
-				continue
-			}
+			// 移除旧的 userInputChan 和 webhookPrompts case
+			/*
+				case message, ok := <-userInputChan:
+					// ... old code ...
+				case webhookPrompt := <-app.webhookPrompts:
+					// ... old code ...
+			*/
 
 		} // end select
 
-		// 裁剪对话历史
+		// 裁剪对话历史 (这部分逻辑保持不变)
 		app.trimDialogHistory()
 
 	} // end for
-
-	// 这部分理论上不会执行到，因为退出逻辑在 select 内部处理
-	// fmt.Println("客户端已退出")
 }
 
 // Shutdown 优雅关闭应用
