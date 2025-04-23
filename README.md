@@ -120,10 +120,6 @@ MCP-DevOps 是一个基于 Go 语言开发的 <span style="color:#3498db">Kubern
       <td align="center"><span style="color:#2ecc71">🔑</span></td>
       <td><b>OpenAI API</b> 或兼容的大语言模型 API</td>
     </tr>
-    <tr>
-      <td align="center"><span style="color:#f39c12">🔔</span></td>
-      <td><b>企业微信</b> Webhook URL（用于告警通知）</td>
-    </tr>
   </table>
 </div>
 
@@ -143,16 +139,17 @@ MCP-DevOps 是一个基于 Go 语言开发的 <span style="color:#3498db">Kubern
    ```ini
    # 服务器配置
    MCP_SERVER_ADDRESS=0.0.0.0:12345
-   API_KEY=your-secret-api-key
+   API_KEY=[your-secret-api-key]
 
    # 客户端配置
    MCP_SERVER_URL=http://127.0.0.1:12345/sse
-   OPENAI_API_KEY=your-openai-api-key
-   OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-   OPENAI_MODEL=qwen-max
-
-   # 企业微信配置
-   WECHAT_WEBHOOK_URL=https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=your-webhook-key
+   ModelType=openai
+   OPENAI_API_KEY=[your-openai-api-key]
+   OPENAI_BASE_URL=[your-openai-base-url]
+   OPENAI_MODEL=[your-openai-model]
+   OLLAMA_BASE_URL=[your-ollama-base-url]
+   OLLAMA_MODEL=[your-ollama-model]
+   PORT=8080
    ```
 </details>
 
@@ -179,30 +176,10 @@ cd client
 go run main.go
 ```
 
-命令行客户端启动后，会连接到服务器并提供命令行交互界面。同时，它会在后台启动一个 Webhook 监听器（默认监听 `http://localhost:9094/webhook`）用于接收 Alertmanager 告警。
+命令行客户端启动后，会连接到服务器并提供命令行交互界面。同时，它会在后台启动一个 Webhook 监听器（默认监听 `http://localhost:8080/webhook`）用于接收 Alertmanager 告警。
 
 <div style="background-color: #f8f9fa; border-left: 4px solid #3498db; padding: 10px; margin: 10px 0;">
   <span style="color:#3498db">🔔 注意：</span> 首次启动时，客户端会尝试连接服务器并获取可用工具列表。如果连接失败，将自动重试。
-</div>
-</details>
-
-<details open>
-<summary><span style="color:#9b59b6; font-weight:bold;">🌐 启动 Web 客户端</span></summary>
-
-```bash
-cd client/web
-npm install
-npm run dev
-```
-
-Web 客户端将在 http://localhost:3000 启动，提供现代化的 Web 界面来与 AI 助手交互。
-
-<div style="background-color: #f8f9fa; border-left: 4px solid #9b59b6; padding: 10px; margin: 10px 0;">
-  <span style="color:#9b59b6">✨ 特性：</span> Web 客户端提供了用户认证、聊天界面、深色/浅色模式切换、响应式设计和告警管理功能。
-</div>
-
-<div style="background-color: #f8f9fa; border-left: 4px solid #f39c12; padding: 10px; margin: 10px 0;">
-  <span style="color:#f39c12">🔑 登录：</span> 使用默认账号 <code>admin</code> / <code>admin123</code> 登录系统。
 </div>
 </details>
 
