@@ -1,10 +1,12 @@
 package sse
 
 import (
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
 	"mcp-devops/server/k8s"
 	"mcp-devops/server/linux"
+	"mcp-devops/server/redis"
+
+	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
 )
 
 func K8sServer() (*server.MCPServer, error) {
@@ -797,5 +799,8 @@ func K8sServer() (*server.MCPServer, error) {
 			mcp.DefaultString("text_notice"),
 		),
 	), k8s.SendWeChatMessageTool)
+
+	// 添加Redis工具
+	redis.AddRedisTools(svr)
 	return svr, nil
 }
