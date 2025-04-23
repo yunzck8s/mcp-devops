@@ -11,6 +11,7 @@ require (
 	github.com/cloudwego/eino-ext/components/tool/mcp v0.0.0-20250411030116-6d40409f0920
 	github.com/joho/godotenv v1.5.1
 	github.com/mark3labs/mcp-go v0.20.0
+	golang.org/x/crypto v0.31.0
 	k8s.io/api v0.32.3
 	k8s.io/apimachinery v0.32.3
 	k8s.io/client-go v0.32.3

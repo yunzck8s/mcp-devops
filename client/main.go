@@ -55,13 +55,13 @@ type AlertmanagerWebhookMessage struct {
 }
 
 const (
-	maxRetries      = 5  // 最大重试次数
-	retryInterval   = 5  // 重试间隔(秒)
-	agentTimeout    = 90 // 代理执行超时时间(秒)
-	toolTimeout     = 30 // 工具执行超时时间(秒)
-	toolUpdateTime  = 30 // 工具更新间隔(分钟)
-	maxHistoryItems = 10 // 最大历史记录条数
-	reconnectBuffer = 5  // 重连通道缓冲区大小
+	maxRetries      = 5   // 最大重试次数
+	retryInterval   = 5   // 重试间隔(秒)
+	agentTimeout    = 180 // 代理执行超时时间(秒), 增加以处理较长的SSH操作
+	toolTimeout     = 60  // 工具执行超时时间(秒), 增加以处理较长的命令执行
+	toolUpdateTime  = 30  // 工具更新间隔(分钟)
+	maxHistoryItems = 10  // 最大历史记录条数
+	reconnectBuffer = 5   // 重连通道缓冲区大小
 )
 
 // Debug 是否开启调试模式

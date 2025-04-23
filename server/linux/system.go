@@ -1,38 +1,284 @@
 package linux
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"golang.org/x/crypto/ssh"
 )
+
+// sshClient is a reusable SSH client for command execution
+var sshClient *ssh.Client
+var sshConfig *ssh.ClientConfig
+
+// initSSHConfig initializes SSH configuration for passwordless authentication
+func initSSHConfig() error {
+	// Use environment variable for SSH key path or default to ~/.ssh/id_rsa
+	sshKeyPath := os.Getenv("SSH_KEY_PATH")
+	if sshKeyPath == "" {
+		sshKeyPath = os.Getenv("HOME") + "/.ssh/id_rsa"
+	}
+
+	// Read the private key
+	key, err := os.ReadFile(sshKeyPath)
+	if err != nil {
+		return fmt.Errorf("无法读取SSH私钥文件 %s: %v", sshKeyPath, err)
+	}
+
+	// Create the signer for this private key
+	signer, err := ssh.ParsePrivateKey(key)
+	if err != nil {
+		return fmt.Errorf("解析SSH私钥失败: %v", err)
+	}
+
+	// Configure SSH client with passwordless auth
+	sshConfig = &ssh.ClientConfig{
+		User: os.Getenv("SSH_USER"),
+		Auth: []ssh.AuthMethod{
+			ssh.PublicKeys(signer),
+		},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // Note: In production, use a proper host key verification
+		Timeout:         5 * time.Second,
+	}
+
+	if sshConfig.User == "" {
+		sshConfig.User = os.Getenv("USER") // Fallback to current user
+	}
+
+	return nil
+}
+
+// testSSHConnection tests if SSH passwordless connection is working for a given host
+func testSSHConnection(hostname string) error {
+	if sshConfig == nil {
+		if err := initSSHConfig(); err != nil {
+			return err
+		}
+	}
+
+	// Format host with port (default to 22 if not specified)
+	hostWithPort := hostname
+	if !strings.Contains(hostname, ":") {
+		hostWithPort = hostname + ":22"
+	}
+
+	// Attempt to establish SSH connection
+	client, err := ssh.Dial("tcp", hostWithPort, sshConfig)
+	if err != nil {
+		return fmt.Errorf("SSH连接测试失败，请确保已配置免密认证: %v", err)
+	}
+	defer client.Close()
+
+	// Connection successful
+	return nil
+}
+
+// executeSSHCommand executes a command via SSH on a remote host
+func executeSSHCommand(hostname, command string) (string, error) {
+	if sshConfig == nil {
+		if err := initSSHConfig(); err != nil {
+			return "", err
+		}
+	}
+
+	// Format host with port (default to 22 if not specified)
+	hostWithPort := hostname
+	if !strings.Contains(hostname, ":") {
+		hostWithPort = hostname + ":22"
+	}
+
+	// Establish SSH connection
+	client, err := ssh.Dial("tcp", hostWithPort, sshConfig)
+	if err != nil {
+		return "", fmt.Errorf("无法连接到 %s: %v", hostname, err)
+	}
+	defer client.Close()
+
+	// Create a session
+	session, err := client.NewSession()
+	if err != nil {
+		return "", fmt.Errorf("创建SSH会话失败: %v", err)
+	}
+	defer session.Close()
+
+	// Execute the command
+	var stdout, stderr bytes.Buffer
+	session.Stdout = &stdout
+	session.Stderr = &stderr
+
+	err = session.Run(command)
+	if err != nil {
+		return stderr.String(), fmt.Errorf("执行命令失败: %v\n错误输出: %s", err, stderr.String())
+	}
+
+	return stdout.String(), nil
+}
+
+// executeLocalCommand executes a command locally on the server
+func executeLocalCommand(command string) (string, error) {
+	// Split the command into parts for exec.Command
+	parts := strings.Fields(command)
+	if len(parts) == 0 {
+		return "", fmt.Errorf("命令为空")
+	}
+
+	cmd := exec.Command(parts[0], parts[1:]...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	if err != nil {
+		return stderr.String(), fmt.Errorf("执行本地命令失败: %v\n错误输出: %s", err, stderr.String())
+	}
+
+	return stdout.String(), nil
+}
+
+// executeCommand 辅助函数：执行命令
+func executeCommand(command string) (string, error) {
+	// Check if the command involves SSH to a remote host
+	if strings.HasPrefix(command, "ssh ") {
+		// Extract hostname from the command
+		parts := strings.Fields(command)
+		if len(parts) < 2 {
+			return "", fmt.Errorf("SSH命令格式错误，无法解析主机名")
+		}
+		hostname := parts[1]
+
+		// Test SSH connection first to ensure passwordless auth is set up
+		err := testSSHConnection(hostname)
+		if err != nil {
+			return "", fmt.Errorf("SSH免密认证未配置或不可用: %v\n请确保已配置SSH免密登录到 %s", err, hostname)
+		}
+
+		// Extract the actual command to run on the remote host
+		sshCmdIndex := strings.Index(command, "'")
+		if sshCmdIndex == -1 {
+			return "", fmt.Errorf("无法解析SSH命令内容")
+		}
+		remoteCommand := command[sshCmdIndex+1 : len(command)-1]
+
+		// Execute the command via SSH
+		output, err := executeSSHCommand(hostname, remoteCommand)
+		if err != nil {
+			return "", fmt.Errorf("SSH命令执行失败: %v", err)
+		}
+		return output, nil
+	}
+
+	// Local command execution
+	output, err := executeLocalCommand(command)
+	if err != nil {
+		return "", fmt.Errorf("本地命令执行失败: %v", err)
+	}
+	return output, nil
+}
 
 // SystemInfoTool 获取系统信息的工具函数
 func SystemInfoTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	hostname, _ := request.Params.Arguments["hostname"].(string)
-	
+
 	fmt.Println("ai 正在调用mcp server的tool: system_info, hostname=", hostname)
 
-	// 构建命令
-	var command string
+	// 构建命令以获取系统信息
+	var unameCmd, osReleaseCmd, uptimeCmd, memCmd, diskCmd string
 	if hostname != "" {
-		command = fmt.Sprintf("ssh %s 'uname -a && cat /etc/os-release && uptime && free -h && df -h'", hostname)
+		unameCmd = fmt.Sprintf("ssh %s 'uname -a'", hostname)
+		osReleaseCmd = fmt.Sprintf("ssh %s 'cat /etc/os-release'", hostname)
+		uptimeCmd = fmt.Sprintf("ssh %s 'uptime'", hostname)
+		memCmd = fmt.Sprintf("ssh %s 'free -h'", hostname)
+		diskCmd = fmt.Sprintf("ssh %s 'df -h'", hostname)
 	} else {
-		command = "uname -a && cat /etc/os-release && uptime && free -h && df -h"
+		unameCmd = "uname -a"
+		osReleaseCmd = "cat /etc/os-release"
+		uptimeCmd = "uptime"
+		memCmd = "free -h"
+		diskCmd = "df -h"
 	}
 
-	// 执行命令
-	output, err := executeCommand(command)
-	if err != nil {
-		return mcp.NewToolResultText(fmt.Sprintf("获取系统信息失败: %v", err)), err
-	}
-
-	// 格式化输出
+	// 执行命令并收集输出
 	var result strings.Builder
-	result.WriteString("系统信息:\n\n")
-	result.WriteString(output)
+	result.WriteString(fmt.Sprintf("<b>%s节点系统信息：</b><br><br>", hostname))
+
+	// 获取内核信息
+	unameOutput, err := executeCommand(unameCmd)
+	if err != nil {
+		result.WriteString(fmt.Sprintf("获取内核信息失败: %v<br>", err))
+	} else {
+		result.WriteString("<b>内核信息：</b><br>")
+		result.WriteString(unameOutput)
+		result.WriteString("<br><br>")
+	}
+
+	// 获取操作系统信息
+	osReleaseOutput, err := executeCommand(osReleaseCmd)
+	if err != nil {
+		result.WriteString(fmt.Sprintf("获取操作系统信息失败: %v<br>", err))
+	} else {
+		result.WriteString("<b>操作系统信息：</b><br>")
+		lines := strings.Split(osReleaseOutput, "\n")
+		for _, line := range lines {
+			if strings.Contains(line, "=") {
+				parts := strings.SplitN(line, "=", 2)
+				if len(parts) == 2 {
+					key := strings.Trim(parts[0], "\"")
+					value := strings.Trim(parts[1], "\"")
+					if key == "NAME" || key == "VERSION" || key == "PRETTY_NAME" {
+						result.WriteString(fmt.Sprintf("%s: %s<br>", key, value))
+					}
+				}
+			}
+		}
+		result.WriteString("<br>")
+	}
+
+	// 获取运行时间
+	uptimeOutput, err := executeCommand(uptimeCmd)
+	if err != nil {
+		result.WriteString(fmt.Sprintf("获取运行时间失败: %v<br>", err))
+	} else {
+		result.WriteString("<b>运行时间：</b><br>")
+		result.WriteString(uptimeOutput)
+		result.WriteString("<br><br>")
+	}
+
+	// 获取内存使用情况
+	memOutput, err := executeCommand(memCmd)
+	if err != nil {
+		result.WriteString(fmt.Sprintf("获取内存信息失败: %v<br>", err))
+	} else {
+		result.WriteString("<b>内存使用情况：</b><br>")
+		lines := strings.Split(memOutput, "\n")
+		for _, line := range lines {
+			result.WriteString(line)
+			result.WriteString("<br>")
+		}
+		result.WriteString("<br>")
+	}
+
+	// 获取磁盘使用情况
+	diskOutput, err := executeCommand(diskCmd)
+	if err != nil {
+		result.WriteString(fmt.Sprintf("获取磁盘信息失败: %v<br>", err))
+	} else {
+		result.WriteString("<b>磁盘使用情况：</b><br>")
+		lines := strings.Split(diskOutput, "\n")
+		for _, line := range lines {
+			result.WriteString(line)
+			result.WriteString("<br>")
+		}
+		result.WriteString("<br>")
+	}
+
+	// 添加备注以确保内容不被截断
+	result.WriteString("<i>注：以上为完整系统信息，未经截断。</i>")
 
 	return mcp.NewToolResultText(result.String()), nil
 }
@@ -118,7 +364,7 @@ func ResourceUsageTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 	} else {
 		memCommand = "free -h"
 	}
-	
+
 	memOutput, err := executeCommand(memCommand)
 	if err == nil {
 		result.WriteString("\n内存使用情况:\n\n")
@@ -132,7 +378,7 @@ func ResourceUsageTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 	} else {
 		diskCommand = "df -h"
 	}
-	
+
 	diskOutput, err := executeCommand(diskCommand)
 	if err == nil {
 		result.WriteString("\n磁盘使用情况:\n\n")
@@ -207,7 +453,7 @@ func LogAnalysisTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.Cal
 	if logPath == "" {
 		logPath = "/var/log/syslog" // 默认日志文件
 	}
-	
+
 	pattern, _ := request.Params.Arguments["pattern"].(string)
 	lines, _ := request.Params.Arguments["lines"].(float64)
 	if lines == 0 {
@@ -257,10 +503,10 @@ func LogAnalysisTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.Cal
 			errorCommand = fmt.Sprintf("grep -i \"error\" %s | wc -l", logPath)
 			warnCommand = fmt.Sprintf("grep -i \"warn\" %s | wc -l", logPath)
 		}
-		
+
 		errorCount, err1 := executeCommand(errorCommand)
 		warnCount, err2 := executeCommand(warnCommand)
-		
+
 		if err1 == nil && err2 == nil {
 			result.WriteString("\n日志统计:\n")
 			result.WriteString(fmt.Sprintf("  错误 (Error) 数量: %s", errorCount))
@@ -310,17 +556,4 @@ func ServiceStatusTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 	result.WriteString(output)
 
 	return mcp.NewToolResultText(result.String()), nil
-}
-
-// 辅助函数：执行命令
-func executeCommand(command string) (string, error) {
-	// 这里应该实现实际的命令执行逻辑
-	// 在实际实现中，可能需要使用os/exec包来执行命令
-	// 但由于这是一个示例，我们只返回一个模拟的输出
-	
-	// 模拟命令执行延迟
-	time.Sleep(500 * time.Millisecond)
-	
-	// 返回模拟输出
-	return fmt.Sprintf("执行命令: %s\n\n[命令输出将在实际环境中显示]", command), nil
 }
