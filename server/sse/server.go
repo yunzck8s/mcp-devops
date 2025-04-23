@@ -115,6 +115,39 @@ func K8sServer() (*server.MCPServer, error) {
 		),
 	), k8s.RestartDeploymentTool)
 
+	// 添加Kubernetes DaemonSet相关工具
+	svr.AddTool(mcp.NewTool("list_daemonsets",
+		mcp.WithDescription("列出指定命名空间中的所有DaemonSets"),
+		mcp.WithString("namespace",
+			mcp.Description("要查询的命名空间, 默认为default"),
+			mcp.DefaultString("default"),
+		),
+	), k8s.ListDaemonSetsTool)
+
+	svr.AddTool(mcp.NewTool("describe_daemonset",
+		mcp.WithDescription("查看DaemonSet的详细信息"),
+		mcp.WithString("daemonset_name",
+			mcp.Required(),
+			mcp.Description("要查看的StatefulSet名称"),
+		),
+		mcp.WithString("namespace",
+			mcp.Description("DaemonSet所在的命名空间, 默认为default"),
+			mcp.DefaultString("default"),
+		),
+	), k8s.DescribeDaemonSetTool)
+
+	svr.AddTool(mcp.NewTool("restart_daemonset",
+		mcp.WithDescription("重启DaemonSet的所有Pod"),
+		mcp.WithString("daemonset_name",
+			mcp.Required(),
+			mcp.Description("要重启的DaemonSet名称"),
+		),
+		mcp.WithString("namespace",
+			mcp.Description("DaemonSet所在的命名空间, 默认为default"),
+			mcp.DefaultString("default"),
+		),
+	), k8s.RestartDaemonSetTool)
+
 	// 添加Kubernetes StatefulSet相关工具
 	svr.AddTool(mcp.NewTool("list_statefulsets",
 		mcp.WithDescription("列出指定命名空间中的所有StatefulSet"),
