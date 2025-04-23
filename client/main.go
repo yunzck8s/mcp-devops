@@ -162,8 +162,8 @@ func (app *Application) handleWebhook(w http.ResponseWriter, r *http.Request) {
 			promptBuilder.WriteString(fmt.Sprintf("  其他标签: %s\n", otherLabelDetails))
 		}
 	}
-	// **明确指示 AI 使用工具发送到企业微信**
-	promptBuilder.WriteString("\n请对上述告警进行分析总结，在告警中含有信息，你可以先结合当前的工具进行排查获取信息，仔细分析之后 ，再使用【发送企业微信消息】工具将分析结果发送出去。")
+	// **明确指示 AI 使用工具发送到企业微信，并针对中间件相关告警调用诊断工具**
+	promptBuilder.WriteString("\n请对上述告警进行分析总结，在告警中含有信息，你可以先结合当前的工具进行排查获取信息。如果告警与中间件相关（如Redis、数据库、消息队列等），请使用相关的诊断工具（如redis_info、redis_slowlog、redis_bigkeys等）收集更多信息以便深入分析。仔细分析之后，再使用【发送企业微信消息】工具将分析结果发送出去。")
 	// --- Prompt 构造结束 ---
 
 	// 将构造好的 prompt 发送到通道

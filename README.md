@@ -96,6 +96,16 @@ MCP-DevOps 是一个基于 Go 语言开发的 <span style="color:#3498db">Kubern
 - <span style="color:#8e44ad">📝 组件日志</span>：分析 Kubernetes 组件日志，查找错误和警告信息
 - <span style="color:#e67e22">🔍 容器检查</span>：检查容器详情和日志，深入排查应用问题
 
+### <span style="color:#e67e22">🔑 Redis 工具</span>
+- <span style="color:#3498db">📊 Redis 信息</span>：获取 Redis 服务器运行时信息
+- <span style="color:#e74c3c">⏱️ 慢查询分析</span>：分析 Redis 慢查询日志
+- <span style="color:#2ecc71">🔍 大键查找</span>：查找 Redis 中的大键（超过 1MB）
+- <span style="color:#f39c12">🔥 热键查找</span>：查找 Redis 中的热键
+- <span style="color:#9b59b6">👀 命令监控</span>：实时查看 Redis 执行的命令流（高负载，慎用）
+- <span style="color:#2980b9">📉 延迟测量</span>：测量 Redis 的延迟
+- <span style="color:#16a085">📈 延迟历史</span>：测量 Redis 延迟并获取历史数据
+- <span style="color:#8e44ad">📊 统计信息</span>：实时查看 Redis 简洁统计信息
+
 ### <span style="color:#f39c12">🤖 交互与用户体验</span>
 - <span style="color:#3498db">💬 自然语言交互</span>：通过自然语言描述你想执行的操作
 - <span style="color:#e74c3c">🇨🇳 中文支持</span>：系统默认使用中文进行交互
