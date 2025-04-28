@@ -73,12 +73,17 @@ MCP-DevOps 是一个基于 Go 语言开发的 <span style="color:#3498db">Kubern
 
 ### <span style="color:#e74c3c">🚨 故障诊断与告警处理</span>
 - <span style="color:#3498db">🏥 集群健康检查</span>：获取集群整体健康状态，包括节点、Pod 和命名空间状态
-- <span style="color:#2ecc71">🔍 Pod 诊断</span>：深入分析 Pod 问题，检查容器状态、事件和日志，提供解决建议
-- <span style="color:#e67e22">📊 节点诊断</span>：检查节点状态、资源使用情况和运行的 Pod，识别潜在问题
-- <span style="color:#9b59b6">🚀 Deployment 诊断</span>：分析 Deployment 部署和更新问题，检查副本状态和事件
+- <span style="color:#e74c3c">🔍 Pod 诊断</span>：深入分析 Pod 问题，检查容器状态、事件和日志，提供解决建议
+- <span style="color:#2ecc71">📊 节点诊断</span>：检查节点状态、资源使用情况和运行的 Pod，识别潜在问题
+- <span style="color:#e67e22">🚀 Deployment 诊断</span>：分析 Deployment 部署和更新问题，检查副本状态和事件
 - <span style="color:#f1c40f">⚠️ 告警分析</span>：处理和分析 Prometheus/Alertmanager 告警，提供根本原因分析和解决方案
 - <span style="color:#1abc9c">📱 企业微信通知</span>：支持发送文本、Markdown 和卡片类型的企业微信消息，用于告警通知和状态报告
 - <span style="color:#34495e">🔔 Alertmanager Webhook 集成</span>：客户端内置 Webhook 监听器（默认端口 9094），可接收 Alertmanager 告警，交由 AI 分析并通过企业微信发送通知
+
+### <span style="color:#f39c12">📜 Loki日志分析与通知</span>
+- <span style="color:#3498db">🔎 日志查询</span>：查询指定服务的Loki日志，支持最近30分钟或自定义时间范围的日志查看
+- <span style="color:#e74c3c">📊 日志分析</span>：分析服务日志，提取关键信息和模式，提供运行状态总结
+- <span style="color:#2ecc71">📤 通知发送</span>：将日志分析结果通过企业微信发送，支持中文内容，确保团队及时了解服务状态
 
 ### <span style="color:#2ecc71">🐧 Linux 系统排查</span>
 - <span style="color:#3498db">💻 系统信息</span>：获取主机基本信息，包括操作系统、内核版本、资源使用情况等

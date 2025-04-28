@@ -3,6 +3,7 @@ package sse
 import (
 	"mcp-devops/server/k8s"
 	"mcp-devops/server/linux"
+	"mcp-devops/server/loki"
 	"mcp-devops/server/redis"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -802,5 +803,8 @@ func K8sServer() (*server.MCPServer, error) {
 
 	// 添加Redis工具
 	redis.AddRedisTools(svr)
+
+	// 添加Loki工具
+	loki.AddLokiTools(svr)
 	return svr, nil
 }
