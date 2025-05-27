@@ -85,6 +85,15 @@ MCP-DevOps 是一个基于 Go 语言开发的 <span style="color:#3498db">Kubern
 - <span style="color:#e74c3c">📊 日志分析</span>：分析服务日志，提取关键信息和模式，提供运行状态总结
 - <span style="color:#2ecc71">📤 通知发送</span>：将日志分析结果通过企业微信发送，支持中文内容，确保团队及时了解服务状态
 
+### <span style="color:#8e44ad">🔍 ClickHouse 链路追踪分析</span>
+- <span style="color:#3498db">📊 服务深度分析</span>：针对单个服务进行全方位性能分析，包括调用模式、错误率、延迟分布等
+- <span style="color:#e74c3c">🔗 Trace 链路分析</span>：深度分析单个 trace_id 的完整调用链路，识别性能瓶颈和异常行为
+- <span style="color:#2ecc71">🎯 异常追踪</span>：自动查找包含错误 spans 的 trace，快速定位问题来源
+- <span style="color:#f39c12">⚡ 性能优化</span>：识别慢查询、大跨度链路和性能异常，提供优化建议
+- <span style="color:#9b59b6">📈 时间趋势</span>：分析服务在不同时间段的性能表现，识别性能劣化趋势
+- <span style="color:#e67e22">🔄 依赖分析</span>：分析服务间的调用关系和依赖模式，优化服务架构
+- <span style="color:#1abc9c">🚨 健康评估</span>：基于错误率和延迟自动评估服务健康状态，提供诊断建议
+
 ### <span style="color:#2ecc71">🐧 Linux 系统排查</span>
 - <span style="color:#3498db">💻 系统信息</span>：获取主机基本信息，包括操作系统、内核版本、资源使用情况等
 - <span style="color:#e74c3c">⚙️ 进程管理</span>：查看和分析进程状态，识别高 CPU 或内存使用的进程
@@ -135,6 +144,14 @@ MCP-DevOps 是一个基于 Go 语言开发的 <span style="color:#3498db">Kubern
       <td align="center"><span style="color:#2ecc71">🔑</span></td>
       <td><b>OpenAI API</b> 或兼容的大语言模型 API</td>
     </tr>
+    <tr>
+      <td align="center"><span style="color:#8e44ad">🗄️</span></td>
+      <td><b>ClickHouse 数据库</b>（可选，用于链路追踪分析功能）</td>
+    </tr>
+    <tr>
+      <td align="center"><span style="color:#f39c12">📊</span></td>
+      <td><b>Loki 日志系统</b>（可选，用于日志分析功能）</td>
+    </tr>
   </table>
 </div>
 
@@ -149,9 +166,7 @@ MCP-DevOps 是一个基于 Go 语言开发的 <span style="color:#3498db">Kubern
    cd mcp-devops
    ```
 
-2. 配置 `.env` 文件（项目根目录已提供示例）：
-
-   ```ini
+2. 配置 `.env` 文件（项目根目录已提供示例）：   ```ini
    # 服务器配置
    MCP_SERVER_ADDRESS=0.0.0.0:12345
    API_KEY=[your-secret-api-key]
@@ -165,6 +180,18 @@ MCP-DevOps 是一个基于 Go 语言开发的 <span style="color:#3498db">Kubern
    OLLAMA_BASE_URL=[your-ollama-base-url]
    OLLAMA_MODEL=[your-ollama-model]
    PORT=8080
+
+   # ClickHouse 配置（可选，用于链路追踪分析）
+   CLICKHOUSE_ADDRESS=[your-clickhouse-host:port]
+   CLICKHOUSE_USERNAME=[your-clickhouse-username]
+   CLICKHOUSE_PASSWORD=[your-clickhouse-password]
+   CLICKHOUSE_DATABASE=[your-clickhouse-database]
+
+   # Loki 配置（可选，用于日志分析）
+   LOKI_ADDRESS=[your-loki-address]
+
+   # 企业微信配置（可选，用于消息通知）
+   WECHAT_WEBHOOK_URL=[your-wechat-webhook-url]
    ```
 </details>
 
@@ -283,6 +310,64 @@ go run main.go
 </details>
 
 <details>
+<summary><span style="color:#8e44ad; font-weight:bold;">🔍 ClickHouse 链路追踪分析</span></summary>
+
+<table>
+  <tr>
+    <th>功能</th>
+    <th>示例命令</th>
+  </tr>
+  <tr>
+    <td><span style="color:#3498db">服务深度分析</span></td>
+    <td><code>分析 user-service 服务的性能，时间范围 24 小时</code></td>
+  </tr>
+  <tr>
+    <td><span style="color:#e74c3c">Trace 详细分析</span></td>
+    <td><code>分析 trace ID 为 abc123xyz789 的完整调用链路</code></td>
+  </tr>
+  <tr>
+    <td><span style="color:#2ecc71">深度追踪分析</span></td>
+    <td><code>深度分析 trace ID abc123xyz789 的性能瓶颈</code></td>
+  </tr>
+  <tr>
+    <td><span style="color:#f39c12">错误追踪</span></td>
+    <td><code>查找包含错误的 trace 列表</code></td>
+  </tr>
+  <tr>
+    <td><span style="color:#9b59b6">性能异常检测</span></td>
+    <td><code>查找 span 数量超过 1000 的重负载 trace</code></td>
+  </tr>
+  <tr>
+    <td><span style="color:#e67e22">慢查询分析</span></td>
+    <td><code>查找最慢的 10 个 trace 链路</code></td>
+  </tr>
+  <tr>
+    <td><span style="color:#1abc9c">综合报告</span></td>
+    <td><code>生成 trace ID abc123xyz789 的完整分析报告</code></td>
+  </tr>
+</table>
+</details>
+
+<details>
+<summary><span style="color:#f39c12; font-weight:bold;">📜 Loki 日志分析</span></summary>
+
+<table>
+  <tr>
+    <th>功能</th>
+    <th>示例命令</th>
+  </tr>
+  <tr>
+    <td><span style="color:#3498db">服务日志查询</span></td>
+    <td><code>查看 user-service 服务最近 30 分钟的日志</code></td>
+  </tr>
+  <tr>
+    <td><span style="color:#e74c3c">时间范围日志</span></td>
+    <td><code>查看 user-service 从 2023-10-01T00:00:00Z 到 2023-10-01T01:00:00Z 的日志</code></td>
+  </tr>
+</table>
+</details>
+
+<details>
 <summary><span style="color:#2ecc71; font-weight:bold;">🐧 Linux 系统排查</span></summary>
 
 <table>
@@ -315,6 +400,36 @@ go run main.go
 
 <details>
 <summary><span style="color:#9b59b6; font-weight:bold;">⚙️ Kubernetes 组件排查</span></summary>
+
+<table>
+  <tr>
+    <th>功能</th>
+    <th>示例命令</th>
+  </tr>
+  <tr>
+    <td><span style="color:#e74c3c">Kubelet 状态</span></td>
+    <td><code>检查节点 worker-1 上的 Kubelet 状态</code></td>
+  </tr>
+  <tr>
+    <td><span style="color:#3498db">容器运行时</span></td>
+    <td><code>检查节点 worker-1 上的 containerd 状态</code></td>
+  </tr>
+  <tr>
+    <td><span style="color:#f1c40f">Kube-Proxy</span></td>
+    <td><code>检查节点 worker-1 上的 Kube-Proxy 状态</code></td>
+  </tr>
+  <tr>
+    <td><span style="color:#2ecc71">CNI 状态</span></td>
+    <td><code>检查节点 worker-1 上的 calico 状态</code></td>
+  </tr>
+  <tr>
+    <td><span style="color:#8e44ad">组件日志</span></td>
+    <td><code>查看节点 worker-1 上的 kubelet 日志</code></td>
+  </tr>
+  <tr>
+    <td><span style="color:#e67e22">容器检查</span></td>
+    <td><code>检查节点 worker-1 上的容器 abc123 的详情</code></td>
+  </tr>
 
 <table>
   <tr>
@@ -389,6 +504,8 @@ mcp-devops/
 │   │   ├── secret.go      # Secret 相关操作
 │   │   ├── troubleshoot.go # 故障诊断工具
 │   │   └── wechat.go      # 企业微信通知
+│   ├── clickhouse/        # ClickHouse 链路追踪分析工具
+│   │   └── tools.go       # 链路追踪分析、服务性能分析
 │   ├── linux/             # Linux 系统操作工具
 │   │   ├── system.go      # 系统信息和资源监控
 │   │   └── kubernetes.go  # Kubernetes 组件排查
@@ -445,9 +562,16 @@ svr.AddTool(mcp.NewTool("list_cronjobs",
   <div style="background-color: #f8f9fa; border-left: 4px solid #f39c12; padding: 10px; margin: 10px 0; border-radius: 4px;">
     <p><span style="color:#f39c12">📱</span> <b>企业微信</b>：企业微信通知功能需要配置有效的企业微信群机器人 Webhook URL</p>
   </div>
-  
-  <div style="background-color: #f8f9fa; border-left: 4px solid #9b59b6; padding: 10px; margin: 10px 0; border-radius: 4px;">
+    <div style="background-color: #f8f9fa; border-left: 4px solid #9b59b6; padding: 10px; margin: 10px 0; border-radius: 4px;">
     <p><span style="color:#9b59b6">🔔</span> <b>告警集成</b>：如需使用 Alertmanager 告警集成，请配置 Alertmanager 将告警发送到客户端运行机器的 <code>http://&lt;client-ip&gt;:9094/webhook</code> 地址</p>
+  </div>
+  
+  <div style="background-color: #f8f9fa; border-left: 4px solid #8e44ad; padding: 10px; margin: 10px 0; border-radius: 4px;">
+    <p><span style="color:#8e44ad">🗄️</span> <b>ClickHouse 链路追踪</b>：如需使用链路追踪分析功能，请确保 ClickHouse 数据库可访问并包含链路追踪数据（OpenTelemetry 格式）</p>
+  </div>
+  
+  <div style="background-color: #f8f9fa; border-left: 4px solid #e67e22; padding: 10px; margin: 10px 0; border-radius: 4px;">
+    <p><span style="color:#e67e22">📊</span> <b>Loki 日志分析</b>：如需使用日志分析功能，请确保 Loki 服务可访问，并配置正确的服务标签</p>
   </div>
 </div>
 
