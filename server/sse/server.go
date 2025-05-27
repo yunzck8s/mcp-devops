@@ -1,6 +1,7 @@
 package sse
 
 import (
+	"mcp-devops/server/clickhouse"
 	"mcp-devops/server/k8s"
 	"mcp-devops/server/linux"
 	"mcp-devops/server/loki"
@@ -806,5 +807,8 @@ func K8sServer() (*server.MCPServer, error) {
 
 	// 添加Loki工具
 	loki.AddLokiTools(svr)
+
+	// 添加ClickHouse工具
+	clickhouse.AddClickhouseTools(svr)
 	return svr, nil
 }
