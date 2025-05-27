@@ -577,11 +577,415 @@ svr.AddTool(mcp.NewTool("list_cronjobs",
 
 ---
 
+## 🐛 故障排除
+
+<details>
+<summary><span style="color:#e74c3c; font-weight:bold;">常见问题解答</span></summary>
+
+### 连接问题
+
+**Q: 客户端无法连接到服务器**
+```bash
+# 检查服务器是否正在运行
+netstat -tlnp | grep 12345
+
+# 检查防火墙设置
+sudo ufw status
+
+# 检查配置文件中的服务器地址
+cat .env | grep MCP_SERVER
+```
+
+**A: 解决方案**
+- 确保服务器已启动并监听正确端口
+- 检查网络连接和防火墙配置
+- 验证 `.env` 文件中的 `MCP_SERVER_URL` 配置
+
+### Kubernetes 相关问题
+
+**Q: 提示 kubeconfig 权限不足**
+```bash
+# 检查当前用户的 kubeconfig
+kubectl config current-context
+
+# 测试集群连接
+kubectl cluster-info
+
+# 检查权限
+kubectl auth can-i get pods --all-namespaces
+```
+
+**A: 解决方案**
+- 确保 kubeconfig 文件路径正确
+- 验证 Kubernetes 集群访问权限
+- 如果在集群外运行，确保网络可达性
+
+### API 密钥问题
+
+**Q: OpenAI API 调用失败**
+```bash
+# 测试 API 密钥有效性
+curl -H "Authorization: Bearer $OPENAI_API_KEY" \
+     -H "Content-Type: application/json" \
+     https://api.openai.com/v1/models
+```
+
+**A: 解决方案**
+- 验证 API 密钥格式和有效性
+- 检查 API 配额和余额
+- 确认 API 端点地址正确
+
+### 性能优化问题
+
+**Q: 系统响应缓慢**
+- 检查网络延迟和带宽
+- 优化数据库查询（ClickHouse/Loki）
+- 调整客户端超时配置
+- 监控服务器资源使用情况
+
+</details>
+
+---
+
+## 🔄 版本信息
+
 <div align="center">
-  <p>Made with ❤️ by MCP-DevOps Team</p>
+  <table>
+    <tr>
+      <td align="center"><span style="color:#3498db">📅</span></td>
+      <td><b>当前版本</b>: v1.0.0</td>
+    </tr>
+    <tr>
+      <td align="center"><span style="color:#2ecc71">🔧</span></td>
+      <td><b>Go 版本要求</b>: 1.23.0+</td>
+    </tr>
+    <tr>
+      <td align="center"><span style="color:#e67e22">📦</span></td>
+      <td><b>主要依赖</b>: Kubernetes v0.32.3, ClickHouse v2.35.0</td>
+    </tr>
+    <tr>
+      <td align="center"><span style="color:#9b59b6">🚀</span></td>
+      <td><b>最后更新</b>: 2024年12月</td>
+    </tr>
+  </table>
+</div>
+
+### 📋 更新日志
+
+<details>
+<summary><b>v1.0.0</b> - 初始版本</summary>
+
+**🆕 新功能**
+- ✅ 完整的 Kubernetes 资源管理功能
+- ✅ 智能故障诊断和告警处理
+- ✅ ClickHouse 链路追踪分析
+- ✅ Loki 日志分析和通知
+- ✅ Linux 系统排查工具
+- ✅ Redis 性能分析工具
+- ✅ 企业微信集成通知
+- ✅ 自然语言交互界面
+
+**🔧 技术特性**
+- 基于 MCP (Model Context Protocol) 协议
+- 支持多种 AI 模型（OpenAI、Ollama）
+- 实时 SSE 通信机制
+- 中文本土化支持
+
+</details>
+
+---
+
+## 🤝 贡献指南
+
+我们欢迎社区贡献！以下是参与项目的方式：
+
+### 📋 贡献类型
+
+<div class="contribution-grid">
+  <div class="contribution-item">
+    <span style="color:#3498db">🐛 Bug 修复</span>：报告和修复已知问题
+  </div>
+  <div class="contribution-item">
+    <span style="color:#2ecc71">✨ 新功能</span>：提议和开发新的功能模块
+  </div>
+  <div class="contribution-item">
+    <span style="color:#f39c12">📖 文档改进</span>：完善文档和使用说明
+  </div>
+  <div class="contribution-item">
+    <span style="color:#e74c3c">🧪 测试</span>：添加测试用例和质量保证
+  </div>
+</div>
+
+### 🔄 开发流程
+
+1. **Fork 项目**
+   ```bash
+   git clone https://github.com/yourusername/mcp-devops.git
+   cd mcp-devops
+   ```
+
+2. **创建特性分支**
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+
+3. **开发和测试**
+   ```bash
+   # 安装依赖
+   go mod tidy
+   
+   # 运行测试
+   go test ./...
+   
+   # 代码格式化
+   go fmt ./...
+   ```
+
+4. **提交更改**
+   ```bash
+   git add .
+   git commit -m "feat: 添加新功能描述"
+   ```
+
+5. **提交 Pull Request**
+   - 详细描述更改内容
+   - 包含相关的测试
+   - 更新文档（如需要）
+
+### 📝 代码规范
+
+- 遵循 Go 语言标准代码规范
+- 为新功能添加适当的注释
+- 确保向后兼容性
+- 包含必要的错误处理
+
+### 🚀 添加新的 Kubernetes 资源支持
+
+如需添加对新 Kubernetes 资源的支持：
+
+```go
+// 1. 在 server/k8s/ 目录创建资源处理文件
+// 例如：server/k8s/persistentvolume.go
+
+func ListPersistentVolumesTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+    // 实现 PV 列表功能
+}
+
+// 2. 在 server/sse/server.go 中注册工具
+svr.AddTool(mcp.NewTool("list_persistent_volumes",
+    mcp.WithDescription("列出集群中的 PersistentVolume"),
+), k8s.ListPersistentVolumesTool)
+```
+
+---
+
+## 📚 API 文档
+
+### 🔗 MCP 工具接口
+
+<details>
+<summary><b>Kubernetes 资源管理 API</b></summary>
+
+**Pod 管理**
+```yaml
+list_pods:
+  description: "列出指定命名空间中的 Pod"
+  parameters:
+    namespace: 
+      type: string
+      default: "default"
+      description: "命名空间名称"
+
+pod_logs:
+  description: "获取 Pod 日志"
+  parameters:
+    name:
+      type: string
+      required: true
+      description: "Pod 名称"
+    namespace:
+      type: string
+      default: "default"
+    container:
+      type: string
+      description: "容器名称（可选）"
+```
+
+**故障诊断**
+```yaml
+pod_diagnostic:
+  description: "诊断 Pod 问题"
+  parameters:
+    name:
+      type: string
+      required: true
+    namespace:
+      type: string
+      default: "default"
+
+cluster_health:
+  description: "检查集群健康状态"
+  parameters: {}
+```
+
+</details>
+
+<details>
+<summary><b>ClickHouse 链路追踪 API</b></summary>
+
+```yaml
+analyze_service:
+  description: "深度分析服务性能"
+  parameters:
+    service_name:
+      type: string
+      required: true
+    time_range_hours:
+      type: number
+      default: 24
+
+trace_analysis:
+  description: "分析特定 trace"
+  parameters:
+    trace_id:
+      type: string
+      required: true
+```
+
+</details>
+
+### 📡 Webhook 接口
+
+**Alertmanager 告警接收**
+```http
+POST http://client-host:9094/webhook
+Content-Type: application/json
+
+{
+  "alerts": [
+    {
+      "labels": {
+        "alertname": "HighCPUUsage",
+        "instance": "worker-1",
+        "severity": "warning"
+      },
+      "annotations": {
+        "description": "CPU usage high",
+        "summary": "CPU 使用率过高"
+      },
+      "status": "firing"
+    }
+  ]
+}
+```
+
+---
+
+## 🔬 测试指南
+
+### 🧪 单元测试
+
+```bash
+# 运行所有测试
+go test ./...
+
+# 运行特定模块测试
+go test ./server/k8s/...
+
+# 生成测试覆盖率报告
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out -o coverage.html
+```
+
+### 🔍 集成测试
+
+1. **Kubernetes 集群测试**
+   ```bash
+   # 确保有可访问的 K8s 集群
+   kubectl cluster-info
+   
+   # 运行 K8s 相关测试
+   cd test/kubernetes
+   go run main.go
+   ```
+
+2. **ClickHouse 连接测试**
+   ```bash
+   # 测试 ClickHouse 连接
+   cd test/clickhouse
+   go run main.go
+   ```
+
+3. **Loki 日志查询测试**
+   ```bash
+   # 测试 Loki 查询
+   cd test/loki
+   go run main.go
+   ```
+
+### 🎯 性能测试
+
+```bash
+# 使用 go tool pprof 进行性能分析
+go test -bench=. -benchmem -cpuprofile=cpu.prof
+go tool pprof cpu.prof
+```
+
+---
+
+## 🏆 致谢
+
+感谢以下开源项目和贡献者：
+
+<div align="center">
+  <table>
+    <tr>
+      <td align="center"><a href="https://kubernetes.io/"><img src="https://kubernetes.io/images/kubernetes-horizontal-color.png" width="100"/><br/>Kubernetes</a></td>
+      <td align="center"><a href="https://clickhouse.com/"><img src="https://avatars.githubusercontent.com/u/54801242?s=200&v=4" width="100"/><br/>ClickHouse</a></td>
+      <td align="center"><a href="https://grafana.com/oss/loki/"><img src="https://grafana.com/static/img/logos/logo-loki.svg" width="100"/><br/>Loki</a></td>
+      <td align="center"><a href="https://redis.io/"><img src="https://redis.io/wp-content/uploads/2024/04/Logotype.svg" width="100"/><br/>Redis</a></td>
+    </tr>
+  </table>
+</div>
+
+**核心依赖**
+- [mark3labs/mcp-go](https://github.com/mark3labs/mcp-go) - MCP 协议实现
+- [cloudwego/eino](https://github.com/cloudwego/eino) - AI 模型集成
+- [kubernetes/client-go](https://github.com/kubernetes/client-go) - Kubernetes API 客户端
+
+---
+
+## 📄 许可证
+
+本项目采用 [Apache License 2.0](https://opensource.org/licenses/Apache-2.0) 许可证。
+
+```
+Copyright 2024 MCP-DevOps Team
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+```
+
+---
+
+## 📞 联系我们
+
+<div align="center">
   <p>
-    <a href="https://github.com/yourusername/mcp-devops">GitHub</a> •
-    <a href="https://github.com/yourusername/mcp-devops/issues">Issues</a> •
-    <a href="https://github.com/yourusername/mcp-devops/wiki">Wiki</a>
+    <a href="mailto:team@mcp-devops.com">📧 Email</a> •
+    <a href="https://github.com/yourusername/mcp-devops/discussions">💬 Discussions</a> •
+    <a href="https://twitter.com/mcpdevops">🐦 Twitter</a> •
+    <a href="https://mcp-devops.com/docs">📖 Documentation</a>
   </p>
 </div>
+
+---
