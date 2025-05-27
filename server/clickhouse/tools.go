@@ -12,12 +12,16 @@ import (
 
 // AddClickhouseTools 注册 ClickHouse 链路分析工具
 func AddClickhouseTools(svr *server.MCPServer) {
-	// 查找 span 数量超过阈值的 trace_id 列表
+	// 查找 span 数量超过阈值的 trace_id 列表（支持时间范围）
 	svr.AddTool(mcp.NewTool("find_heavy_traces",
-		mcp.WithDescription("查找 span 数量超过阈值的 trace_id 列表"),
+		mcp.WithDescription("查找 span 数量超过阈值的 trace_id 列表，支持指定时间范围"),
 		mcp.WithNumber("threshold",
 			mcp.Description("span 数量告警阈值"),
 			mcp.DefaultNumber(1000),
+		),
+		mcp.WithNumber("time_range_hours",
+			mcp.Description("查询时间范围（小时），默认为1小时"),
+			mcp.DefaultNumber(1),
 		),
 		mcp.WithNumber("limit",
 			mcp.Description("结果限制条数"),
@@ -25,18 +29,26 @@ func AddClickhouseTools(svr *server.MCPServer) {
 		),
 	), FindHeavyTracesTool)
 
-	// 查找 span 最大耗时排序的 trace_id 列表
+	// 查找 span 最大耗时排序的 trace_id 列表（支持时间范围）
 	svr.AddTool(mcp.NewTool("find_top_slowest_traces",
-		mcp.WithDescription("按最大 span 耗时排序，获取 trace_id 列表"),
+		mcp.WithDescription("按最大 span 耗时排序，获取 trace_id 列表，支持指定时间范围"),
+		mcp.WithNumber("time_range_hours",
+			mcp.Description("查询时间范围（小时），默认为1小时"),
+			mcp.DefaultNumber(1),
+		),
 		mcp.WithNumber("limit",
 			mcp.Description("结果限制条数"),
 			mcp.DefaultNumber(10),
 		),
 	), FindTopSlowTracesTool)
 
-	// 查找包含错误的 trace_id 列表
+	// 查找包含错误的 trace_id 列表（支持时间范围）
 	svr.AddTool(mcp.NewTool("find_error_traces",
-		mcp.WithDescription("查找包含错误 spans 的 trace_id 列表"),
+		mcp.WithDescription("查找包含错误 spans 的 trace_id 列表，支持指定时间范围"),
+		mcp.WithNumber("time_range_hours",
+			mcp.Description("查询时间范围（小时），默认为1小时"),
+			mcp.DefaultNumber(1),
+		),
 		mcp.WithNumber("limit",
 			mcp.Description("结果限制条数"),
 			mcp.DefaultNumber(100),
@@ -52,10 +64,57 @@ func AddClickhouseTools(svr *server.MCPServer) {
 		),
 	), ReportTraceTool)
 
-	// 查找 span 数量大于1000 的 trace_id 列表
-	svr.AddTool(mcp.NewTool("find_spans_gt_1000",
-		mcp.WithDescription("查找 span 数量大于1000 的 trace_id 列表"),
-	), FindSpansGT1000Tool)
+	// 查找特定服务的异常 trace
+	svr.AddTool(mcp.NewTool("find_service_issues",
+		mcp.WithDescription("查找特定服务的异常 trace，包括错误、慢查询等"),
+		mcp.WithString("service_name",
+			mcp.Description("要查询的服务名称"),
+			mcp.Required(),
+		),
+		mcp.WithNumber("time_range_hours",
+			mcp.Description("查询时间范围（小时），默认为1小时"),
+			mcp.DefaultNumber(1),
+		),
+		mcp.WithNumber("min_duration_ms",
+			mcp.Description("最小耗时阈值（毫秒），默认为1000ms"),
+			mcp.DefaultNumber(1000),
+		),
+		mcp.WithNumber("limit",
+			mcp.Description("结果限制条数"),
+			mcp.DefaultNumber(50),
+		),
+	), FindServiceIssuesTool)
+
+	// 查找频繁操作的 trace
+	svr.AddTool(mcp.NewTool("find_frequent_operations",
+		mcp.WithDescription("查找指定时间范围内频繁执行的操作和对应的 trace"),
+		mcp.WithNumber("time_range_hours",
+			mcp.Description("查询时间范围（小时），默认为1小时"),
+			mcp.DefaultNumber(1),
+		),
+		mcp.WithNumber("min_frequency",
+			mcp.Description("最小频率阈值，默认为100次"),
+			mcp.DefaultNumber(100),
+		),
+		mcp.WithNumber("limit",
+			mcp.Description("结果限制条数"),
+			mcp.DefaultNumber(20),
+		),
+	), FindFrequentOperationsTool)
+
+	// 查找异常模式的 trace
+	svr.AddTool(mcp.NewTool("find_anomaly_traces",
+		mcp.WithDescription("查找异常模式的 trace，如超长链路、错误集中等"),
+		mcp.WithNumber("time_range_hours",
+			mcp.Description("查询时间范围（小时），默认为1小时"),
+			mcp.DefaultNumber(1),
+		),
+		mcp.WithNumber("limit",
+			mcp.Description("结果限制条数"),
+			mcp.DefaultNumber(50),
+		),
+	), FindAnomalyTracesTool)
+
 	// 详细分析单个 trace_id
 	svr.AddTool(mcp.NewTool("analyze_trace",
 		mcp.WithDescription("详细分析单个 trace_id，包括 span 列表、时间线、错误信息等"),
@@ -94,107 +153,225 @@ func AddClickhouseTools(svr *server.MCPServer) {
 			mcp.DefaultNumber(100),
 		),
 	), AnalyzeServiceTool)
+
+	// 服务间调用分析
+	svr.AddTool(mcp.NewTool("analyze_service_dependencies",
+		mcp.WithDescription("分析服务间的调用关系和依赖模式"),
+		mcp.WithString("service_name",
+			mcp.Description("要分析的服务名称"),
+			mcp.Required(),
+		),
+		mcp.WithNumber("time_range_hours",
+			mcp.Description("分析时间范围（小时），默认为1小时"),
+			mcp.DefaultNumber(1),
+		),
+		mcp.WithNumber("limit",
+			mcp.Description("返回的依赖服务数量限制，默认为20"),
+			mcp.DefaultNumber(20),
+		),
+	), AnalyzeServiceDependenciesTool)
 }
 
-// FindHeavyTracesTool 列出 span 数量超过阈值的 trace_id
+// FindHeavyTracesTool 列出 span 数量超过阈值的 trace_id（支持时间范围）
 func FindHeavyTracesTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	th := int64(request.Params.Arguments["threshold"].(float64))
 	lim := int(request.Params.Arguments["limit"].(float64))
+
+	// 获取时间范围，默认1小时
+	timeRangeHours := 1.0
+	if timeVal, ok := request.Params.Arguments["time_range_hours"]; ok && timeVal != nil {
+		if timeFloat, ok := timeVal.(float64); ok {
+			timeRangeHours = timeFloat
+		}
+	}
+
 	conn, err := NewClient()
 	if err != nil {
 		return mcp.NewToolResultText(fmt.Sprintf("连接 ClickHouse 失败: %v", err)), err
 	}
 	defer conn.Close()
+	// 使用ClickHouse的时间函数避免溢出问题
+	sql := `
+		SELECT 
+			trace_id, 
+			count() AS cnt,
+			round(max(duration_nano)/1000000, 2) as max_duration_ms,
+			countIf(has_error = 1) as error_count,
+			uniq(serviceName) as service_count
+		FROM signoz_traces.signoz_index_v3
+		WHERE timestamp >= now() - INTERVAL ? HOUR
+		GROUP BY trace_id 
+		HAVING cnt > ?
+		ORDER BY cnt DESC 
+		LIMIT ?`
 
-	sql := fmt.Sprintf(
-		`SELECT trace_id, count() AS cnt FROM signoz_traces.signoz_index_v3
-         GROUP BY trace_id HAVING cnt > %d
-         ORDER BY cnt DESC LIMIT %d`, th, lim)
-	rows, err := conn.Query(ctx, sql)
+	rows, err := conn.Query(ctx, sql, timeRangeHours, th, lim)
 	if err != nil {
 		return mcp.NewToolResultText(fmt.Sprintf("查询 heavy traces 失败: %v", err)), err
 	}
 	defer rows.Close()
 
-	type Item struct {
-		TraceID string
-		Count   uint64
+	type HeavyTrace struct {
+		TraceID       string  `json:"trace_id"`
+		SpanCount     uint64  `json:"span_count"`
+		MaxDurationMs float64 `json:"max_duration_ms"`
+		ErrorCount    uint64  `json:"error_count"`
+		ServiceCount  uint64  `json:"service_count"`
+		Severity      string  `json:"severity"`
 	}
-	var list []Item
+
+	var list []HeavyTrace
 	for rows.Next() {
-		var id string
-		var cnt uint64
-		if rows.Scan(&id, &cnt) == nil {
-			list = append(list, Item{id, cnt})
+		var item HeavyTrace
+		if rows.Scan(&item.TraceID, &item.SpanCount, &item.MaxDurationMs, &item.ErrorCount, &item.ServiceCount) == nil {
+			// 评估严重程度
+			if item.SpanCount > 5000 {
+				item.Severity = "CRITICAL"
+			} else if item.SpanCount > 2000 {
+				item.Severity = "HIGH"
+			} else {
+				item.Severity = "MEDIUM"
+			}
+			list = append(list, item)
 		}
 	}
-	out, _ := json.MarshalIndent(list, "", "  ")
+
+	result := map[string]interface{}{
+		"query_time_range_hours": timeRangeHours,
+		"threshold":              th,
+		"total_found":            len(list),
+		"heavy_traces":           list, "summary": map[string]interface{}{
+			"critical_traces": len(list), // 可以进一步统计各严重程度的数量
+		},
+	}
+
+	out, _ := json.MarshalIndent(result, "", "  ")
 	return mcp.NewToolResultText(string(out)), nil
 }
 
-// FindTopSlowTracesTool 按最大 span 耗时排序的 trace_id
+// FindTopSlowTracesTool 按最大 span 耗时排序的 trace_id（支持时间范围）
 func FindTopSlowTracesTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	lim := int(request.Params.Arguments["limit"].(float64))
+
+	// 获取时间范围，默认1小时
+	timeRangeHours := 1.0
+	if timeVal, ok := request.Params.Arguments["time_range_hours"]; ok && timeVal != nil {
+		if timeFloat, ok := timeVal.(float64); ok {
+			timeRangeHours = timeFloat
+		}
+	}
+
 	conn, err := NewClient()
 	if err != nil {
 		return mcp.NewToolResultText(fmt.Sprintf("连接失败: %v", err)), err
 	}
 	defer conn.Close()
-	sql := fmt.Sprintf(
-		`SELECT trace_id, max(duration_nano) AS max_dur FROM signoz_traces.signoz_index_v3
-         GROUP BY trace_id ORDER BY max_dur DESC LIMIT %d`, lim)
-	rows, err := conn.Query(ctx, sql)
+	// 使用ClickHouse的时间函数避免溢出问题
+	sql := `
+		SELECT 
+			trace_id, 
+			round(max(duration_nano)/1000000, 2) as max_duration_ms,
+			count() as span_count,
+			countIf(has_error = 1) as error_count,
+			uniq(serviceName) as service_count
+		FROM signoz_traces.signoz_index_v3
+		WHERE timestamp >= now() - INTERVAL ? HOUR
+		GROUP BY trace_id 
+		ORDER BY max(duration_nano) DESC 
+		LIMIT ?`
+
+	rows, err := conn.Query(ctx, sql, timeRangeHours, lim)
 	if err != nil {
 		return mcp.NewToolResultText(fmt.Sprintf("查询 slow traces 失败: %v", err)), err
 	}
 	defer rows.Close()
 
-	type Item struct {
-		TraceID string
-		MaxDur  uint64
+	type SlowTrace struct {
+		TraceID       string  `json:"trace_id"`
+		MaxDurationMs float64 `json:"max_duration_ms"`
+		SpanCount     uint64  `json:"span_count"`
+		ErrorCount    uint64  `json:"error_count"`
+		ServiceCount  uint64  `json:"service_count"`
 	}
-	var list []Item
+
+	var list []SlowTrace
 	for rows.Next() {
-		var id string
-		var dur uint64
-		if rows.Scan(&id, &dur) == nil {
-			list = append(list, Item{id, dur})
+		var item SlowTrace
+		if rows.Scan(&item.TraceID, &item.MaxDurationMs, &item.SpanCount, &item.ErrorCount, &item.ServiceCount) == nil {
+			list = append(list, item)
 		}
 	}
-	out, _ := json.MarshalIndent(list, "", "  ")
+
+	result := map[string]interface{}{
+		"query_time_range_hours": timeRangeHours,
+		"total_found":            len(list),
+		"slowest_traces":         list,
+	}
+
+	out, _ := json.MarshalIndent(result, "", "  ")
 	return mcp.NewToolResultText(string(out)), nil
 }
 
-// FindErrorTracesTool 列出包含错误 spans 的 trace_id
+// FindErrorTracesTool 列出包含错误 spans 的 trace_id（支持时间范围）
 func FindErrorTracesTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	lim := int(request.Params.Arguments["limit"].(float64))
+
+	// 获取时间范围，默认1小时
+	timeRangeHours := 1.0
+	if timeVal, ok := request.Params.Arguments["time_range_hours"]; ok && timeVal != nil {
+		if timeFloat, ok := timeVal.(float64); ok {
+			timeRangeHours = timeFloat
+		}
+	}
+
 	conn, err := NewClient()
 	if err != nil {
 		return mcp.NewToolResultText(fmt.Sprintf("连接失败: %v", err)), err
 	}
 	defer conn.Close()
-	sql := fmt.Sprintf(
-		`SELECT trace_id, countIf(has_error) AS err_count FROM signoz_traces.signoz_index_v3
-         GROUP BY trace_id HAVING err_count > 0 ORDER BY err_count DESC LIMIT %d`, lim)
-	rows, err := conn.Query(ctx, sql)
+	// 使用ClickHouse的时间函数避免溢出问题
+	sql := `
+		SELECT 
+			trace_id, 
+			countIf(has_error = 1) as error_count,
+			count() as total_spans,
+			round(max(duration_nano)/1000000, 2) as max_duration_ms,
+			uniq(serviceName) as service_count
+		FROM signoz_traces.signoz_index_v3
+		WHERE timestamp >= now() - INTERVAL ? HOUR AND has_error = 1
+		GROUP BY trace_id 
+		ORDER BY error_count DESC 
+		LIMIT ?`
+
+	rows, err := conn.Query(ctx, sql, timeRangeHours, lim)
 	if err != nil {
 		return mcp.NewToolResultText(fmt.Sprintf("查询 error traces 失败: %v", err)), err
 	}
 	defer rows.Close()
 
-	type Item struct {
-		TraceID  string
-		ErrCount uint64
+	type ErrorTrace struct {
+		TraceID       string  `json:"trace_id"`
+		ErrorCount    uint64  `json:"error_count"`
+		TotalSpans    uint64  `json:"total_spans"`
+		MaxDurationMs float64 `json:"max_duration_ms"`
+		ServiceCount  uint64  `json:"service_count"`
 	}
-	var list []Item
+
+	var list []ErrorTrace
 	for rows.Next() {
-		var id string
-		var cnt uint64
-		if rows.Scan(&id, &cnt) == nil {
-			list = append(list, Item{id, cnt})
+		var item ErrorTrace
+		if rows.Scan(&item.TraceID, &item.ErrorCount, &item.TotalSpans, &item.MaxDurationMs, &item.ServiceCount) == nil {
+			list = append(list, item)
 		}
 	}
-	out, _ := json.MarshalIndent(list, "", "  ")
+
+	result := map[string]interface{}{
+		"query_time_range_hours": timeRangeHours,
+		"total_found":            len(list),
+		"error_traces":           list,
+	}
+
+	out, _ := json.MarshalIndent(result, "", "  ")
 	return mcp.NewToolResultText(string(out)), nil
 }
 
@@ -341,7 +518,6 @@ func AnalyzeTraceTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.Ca
 		return mcp.NewToolResultText(fmt.Sprintf("查询 spans 失败: %v", err)), err
 	}
 	defer spansRows.Close()
-
 	type SpanInfo struct {
 		SpanID       string `json:"span_id"`
 		ParentSpanID string `json:"parent_span_id"`
@@ -659,12 +835,7 @@ func AnalyzeServiceTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		return mcp.NewToolResultText(fmt.Sprintf("连接 ClickHouse 失败: %v", err)), err
 	}
 	defer conn.Close()
-
-	// 计算时间范围（纳秒时间戳）
-	nowNano := uint64(time.Now().UnixNano())
-	timeRangeNano := uint64(timeRangeHours * 3600 * 1000000000) // 转换为纳秒
-	startTimeNano := nowNano - timeRangeNano
-
+	// 使用ClickHouse的时间函数避免溢出问题
 	// 1. 服务基本性能指标
 	metricsSQL := `
 		SELECT 
@@ -681,7 +852,7 @@ func AnalyzeServiceTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 			countIf(duration_nano > 1000000000) as slow_spans_1s,
 			countIf(duration_nano > 5000000000) as slow_spans_5s
 		FROM signoz_traces.signoz_index_v3 
-		WHERE serviceName = ? AND timestamp >= ?
+		WHERE serviceName = ? AND timestamp >= now() - INTERVAL ? HOUR
 	`
 
 	type ServiceMetrics struct {
@@ -699,9 +870,8 @@ func AnalyzeServiceTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		SlowSpans5s   uint64  `json:"slow_spans_5s"`
 		ErrorRate     float64 `json:"error_rate"`
 	}
-
 	var metrics ServiceMetrics
-	metricsRow := conn.QueryRow(ctx, metricsSQL, timeRangeHours, serviceName, startTimeNano)
+	metricsRow := conn.QueryRow(ctx, metricsSQL, timeRangeHours, serviceName, timeRangeHours)
 	err = metricsRow.Scan(&metrics.TotalSpans, &metrics.ErrorSpans, &metrics.SpansPerHour,
 		&metrics.AvgDurationMs, &metrics.MaxDurationMs, &metrics.MinDurationMs,
 		&metrics.P50DurationMs, &metrics.P95DurationMs, &metrics.P99DurationMs,
@@ -734,9 +904,8 @@ func AnalyzeServiceTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 				WHEN avg(duration_nano) > 1000000000 THEN 'SLOW_OPERATION'
 				WHEN avg(duration_nano) > 500000000 THEN 'MODERATE_OPERATION'
 				ELSE 'FAST_OPERATION'
-			END as performance_pattern
-		FROM signoz_traces.signoz_index_v3 
-		WHERE serviceName = ? AND timestamp >= ?
+			END as performance_pattern		FROM signoz_traces.signoz_index_v3 
+		WHERE serviceName = ? AND timestamp >= now() - INTERVAL ? HOUR
 		GROUP BY name
 		ORDER BY call_count DESC
 		LIMIT ?
@@ -754,7 +923,7 @@ func AnalyzeServiceTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		PerformancePattern string  `json:"performance_pattern"`
 	}
 
-	operationRows, err := conn.Query(ctx, operationSQL, serviceName, startTimeNano, limit)
+	operationRows, err := conn.Query(ctx, operationSQL, serviceName, timeRangeHours, limit)
 	if err != nil {
 		return mcp.NewToolResultText(fmt.Sprintf("查询操作模式失败: %v", err)), err
 	}
@@ -768,16 +937,15 @@ func AnalyzeServiceTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 			operations = append(operations, op)
 		}
 	}
-
 	// 3. 时间分布分析
 	timeDistributionSQL := `
 		SELECT 
-			toHour(toDateTime(timestamp/1000000000)) as hour,
+			toHour(timestamp) as hour,
 			count() as span_count,
 			countIf(has_error = 1) as error_count,
 			round(avg(duration_nano)/1000000, 2) as avg_duration_ms
 		FROM signoz_traces.signoz_index_v3 
-		WHERE serviceName = ? AND timestamp >= ?
+		WHERE serviceName = ? AND timestamp >= now() - INTERVAL ? HOUR
 		GROUP BY hour
 		ORDER BY hour
 	`
@@ -789,7 +957,7 @@ func AnalyzeServiceTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		AvgDurationMs float64 `json:"avg_duration_ms"`
 	}
 
-	timeRows, err := conn.Query(ctx, timeDistributionSQL, serviceName, startTimeNano)
+	timeRows, err := conn.Query(ctx, timeDistributionSQL, serviceName, timeRangeHours)
 	if err != nil {
 		return mcp.NewToolResultText(fmt.Sprintf("查询时间分布失败: %v", err)), err
 	}
@@ -830,7 +998,6 @@ func AnalyzeServiceTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		issues = append(issues, fmt.Sprintf("存在极慢操作: %d个span超过5秒", metrics.SlowSpans5s))
 		recommendations = append(recommendations, "紧急排查超长耗时操作")
 	}
-
 	// 5. 依赖服务分析
 	dependencySQL := `
 		SELECT 
@@ -842,8 +1009,8 @@ func AnalyzeServiceTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		JOIN signoz_traces.signoz_index_v3 t2 ON t1.trace_id = t2.trace_id
 		WHERE t1.serviceName = ? 
 		  AND t2.serviceName != ? 
-		  AND t1.timestamp >= ?
-		  AND t2.timestamp >= ?
+		  AND t1.timestamp >= now() - INTERVAL ? HOUR
+		  AND t2.timestamp >= now() - INTERVAL ? HOUR
 		GROUP BY t2.serviceName
 		ORDER BY call_count DESC
 		LIMIT 20
@@ -856,7 +1023,7 @@ func AnalyzeServiceTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		ErrorCount    uint64  `json:"error_count"`
 	}
 
-	depRows, err := conn.Query(ctx, dependencySQL, serviceName, serviceName, startTimeNano, startTimeNano)
+	depRows, err := conn.Query(ctx, dependencySQL, serviceName, serviceName, timeRangeHours, timeRangeHours)
 	if err != nil {
 		return mcp.NewToolResultText(fmt.Sprintf("查询依赖服务失败: %v", err)), err
 	}
@@ -869,7 +1036,6 @@ func AnalyzeServiceTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 			dependencies = append(dependencies, dep)
 		}
 	}
-
 	// 6. 最慢的trace示例
 	slowTracesSQL := `
 		SELECT 
@@ -878,7 +1044,7 @@ func AnalyzeServiceTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 			count() as span_count,
 			countIf(has_error = 1) as error_count
 		FROM signoz_traces.signoz_index_v3 
-		WHERE serviceName = ? AND timestamp >= ?
+		WHERE serviceName = ? AND timestamp >= now() - INTERVAL ? HOUR
 		GROUP BY trace_id
 		ORDER BY max_duration_nano DESC
 		LIMIT 10
@@ -891,7 +1057,7 @@ func AnalyzeServiceTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.
 		ErrorCount    uint64  `json:"error_count"`
 	}
 
-	slowRows, err := conn.Query(ctx, slowTracesSQL, serviceName, startTimeNano)
+	slowRows, err := conn.Query(ctx, slowTracesSQL, serviceName, timeRangeHours)
 	if err != nil {
 		return mcp.NewToolResultText(fmt.Sprintf("查询慢trace失败: %v", err)), err
 	}
@@ -944,4 +1110,437 @@ func getHealthStatus(errorRate, p95Duration float64) string {
 		return "ATTENTION"
 	}
 	return "HEALTHY"
+}
+
+// FindServiceIssuesTool 查找特定服务的异常 trace
+func FindServiceIssuesTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	serviceName := request.Params.Arguments["service_name"].(string)
+
+	// 获取时间范围，默认1小时
+	timeRangeHours := 1.0
+	if timeVal, ok := request.Params.Arguments["time_range_hours"]; ok && timeVal != nil {
+		if timeFloat, ok := timeVal.(float64); ok {
+			timeRangeHours = timeFloat
+		}
+	}
+
+	// 获取最小耗时阈值，默认1000ms
+	minDurationMs := 1000.0
+	if durationVal, ok := request.Params.Arguments["min_duration_ms"]; ok && durationVal != nil {
+		if durationFloat, ok := durationVal.(float64); ok {
+			minDurationMs = durationFloat
+		}
+	}
+
+	limit := int(request.Params.Arguments["limit"].(float64))
+	conn, err := NewClient()
+	if err != nil {
+		return mcp.NewToolResultText(fmt.Sprintf("连接 ClickHouse 失败: %v", err)), err
+	}
+	defer conn.Close()
+
+	// 使用ClickHouse的时间函数避免溢出问题
+	minDurationNano := uint64(minDurationMs * 1000000)
+
+	sql := `
+		SELECT 
+			trace_id,
+			count() as span_count,
+			round(max(duration_nano)/1000000, 2) as max_duration_ms,
+			round(avg(duration_nano)/1000000, 2) as avg_duration_ms,
+			countIf(has_error = 1) as error_count,
+			uniq(name) as operation_count,
+			CASE 
+				WHEN countIf(has_error = 1) > 0 AND max(duration_nano) > ? THEN 'ERROR_AND_SLOW'
+				WHEN countIf(has_error = 1) > 0 THEN 'ERROR_ONLY'
+				WHEN max(duration_nano) > ? THEN 'SLOW_ONLY'
+				ELSE 'OTHER'
+			END as issue_type
+		FROM signoz_traces.signoz_index_v3
+		WHERE serviceName = ? 
+		  AND timestamp >= now() - INTERVAL ? HOUR
+		  AND (has_error = 1 OR duration_nano > ?)
+		GROUP BY trace_id
+		ORDER BY 
+			CASE issue_type 
+				WHEN 'ERROR_AND_SLOW' THEN 1
+				WHEN 'ERROR_ONLY' THEN 2
+				WHEN 'SLOW_ONLY' THEN 3
+				ELSE 4
+			END,
+			max_duration_ms DESC
+		LIMIT ?`
+
+	rows, err := conn.Query(ctx, sql, minDurationNano, minDurationNano, serviceName, timeRangeHours, minDurationNano, limit)
+	if err != nil {
+		return mcp.NewToolResultText(fmt.Sprintf("查询服务异常失败: %v", err)), err
+	}
+	defer rows.Close()
+
+	type ServiceIssue struct {
+		TraceID        string  `json:"trace_id"`
+		SpanCount      uint64  `json:"span_count"`
+		MaxDurationMs  float64 `json:"max_duration_ms"`
+		AvgDurationMs  float64 `json:"avg_duration_ms"`
+		ErrorCount     uint64  `json:"error_count"`
+		OperationCount uint64  `json:"operation_count"`
+		IssueType      string  `json:"issue_type"`
+	}
+
+	var issues []ServiceIssue
+	issueStats := map[string]int{
+		"ERROR_AND_SLOW": 0,
+		"ERROR_ONLY":     0,
+		"SLOW_ONLY":      0,
+		"OTHER":          0,
+	}
+
+	for rows.Next() {
+		var issue ServiceIssue
+		if rows.Scan(&issue.TraceID, &issue.SpanCount, &issue.MaxDurationMs, &issue.AvgDurationMs,
+			&issue.ErrorCount, &issue.OperationCount, &issue.IssueType) == nil {
+			issues = append(issues, issue)
+			issueStats[issue.IssueType]++
+		}
+	}
+
+	result := map[string]interface{}{
+		"service_name":           serviceName,
+		"query_time_range_hours": timeRangeHours,
+		"min_duration_ms":        minDurationMs,
+		"total_found":            len(issues),
+		"issue_statistics":       issueStats,
+		"service_issues":         issues,
+	}
+
+	out, _ := json.MarshalIndent(result, "", "  ")
+	return mcp.NewToolResultText(string(out)), nil
+}
+
+// FindFrequentOperationsTool 查找频繁执行的操作和对应的 trace
+func FindFrequentOperationsTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// 获取时间范围，默认1小时
+	timeRangeHours := 1.0
+	if timeVal, ok := request.Params.Arguments["time_range_hours"]; ok && timeVal != nil {
+		if timeFloat, ok := timeVal.(float64); ok {
+			timeRangeHours = timeFloat
+		}
+	}
+
+	// 获取最小频率阈值，默认100次
+	minFrequency := 100
+	if freqVal, ok := request.Params.Arguments["min_frequency"]; ok && freqVal != nil {
+		if freqFloat, ok := freqVal.(float64); ok {
+			minFrequency = int(freqFloat)
+		}
+	}
+
+	limit := int(request.Params.Arguments["limit"].(float64))
+	conn, err := NewClient()
+	if err != nil {
+		return mcp.NewToolResultText(fmt.Sprintf("连接 ClickHouse 失败: %v", err)), err
+	}
+	defer conn.Close()
+
+	// 使用ClickHouse的时间函数避免溢出问题
+	sql := `
+		SELECT 
+			name,
+			serviceName,
+			count() as call_frequency,
+			round(avg(duration_nano)/1000000, 2) as avg_duration_ms,
+			round(max(duration_nano)/1000000, 2) as max_duration_ms,
+			countIf(has_error = 1) as error_count,
+			uniq(trace_id) as unique_traces,
+			round(count() / ?, 2) as calls_per_hour,
+			any(trace_id) as sample_trace_id
+		FROM signoz_traces.signoz_index_v3
+		WHERE timestamp >= now() - INTERVAL ? HOUR
+		GROUP BY name, serviceName
+		HAVING call_frequency >= ?
+		ORDER BY call_frequency DESC
+		LIMIT ?`
+
+	rows, err := conn.Query(ctx, sql, timeRangeHours, timeRangeHours, minFrequency, limit)
+	if err != nil {
+		return mcp.NewToolResultText(fmt.Sprintf("查询频繁操作失败: %v", err)), err
+	}
+	defer rows.Close()
+
+	type FrequentOperation struct {
+		Name          string  `json:"name"`
+		ServiceName   string  `json:"service_name"`
+		CallFrequency uint64  `json:"call_frequency"`
+		AvgDurationMs float64 `json:"avg_duration_ms"`
+		MaxDurationMs float64 `json:"max_duration_ms"`
+		ErrorCount    uint64  `json:"error_count"`
+		UniqueTraces  uint64  `json:"unique_traces"`
+		CallsPerHour  float64 `json:"calls_per_hour"`
+		SampleTraceID string  `json:"sample_trace_id"`
+	}
+
+	var operations []FrequentOperation
+	for rows.Next() {
+		var op FrequentOperation
+		if rows.Scan(&op.Name, &op.ServiceName, &op.CallFrequency, &op.AvgDurationMs,
+			&op.MaxDurationMs, &op.ErrorCount, &op.UniqueTraces, &op.CallsPerHour, &op.SampleTraceID) == nil {
+			operations = append(operations, op)
+		}
+	}
+
+	result := map[string]interface{}{
+		"query_time_range_hours": timeRangeHours,
+		"min_frequency":          minFrequency,
+		"total_found":            len(operations),
+		"frequent_operations":    operations,
+	}
+
+	out, _ := json.MarshalIndent(result, "", "  ")
+	return mcp.NewToolResultText(string(out)), nil
+}
+
+// FindAnomalyTracesTool 查找异常模式的 trace
+func FindAnomalyTracesTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// 获取时间范围，默认1小时
+	timeRangeHours := 1.0
+	if timeVal, ok := request.Params.Arguments["time_range_hours"]; ok && timeVal != nil {
+		if timeFloat, ok := timeVal.(float64); ok {
+			timeRangeHours = timeFloat
+		}
+	}
+
+	limit := int(request.Params.Arguments["limit"].(float64))
+
+	conn, err := NewClient()
+	if err != nil {
+		return mcp.NewToolResultText(fmt.Sprintf("连接 ClickHouse 失败: %v", err)), err
+	}
+	defer conn.Close()
+	// 使用ClickHouse的时间函数避免溢出问题
+	sql := `
+		SELECT 
+			trace_id,
+			count() as span_count,
+			round(max(duration_nano)/1000000, 2) as max_duration_ms,
+			round(avg(duration_nano)/1000000, 2) as avg_duration_ms,
+			countIf(has_error = 1) as error_count,
+			uniq(serviceName) as service_count,
+			uniq(name) as operation_count,
+			max(duration_nano) - min(duration_nano) as trace_duration_nano,
+			CASE 
+				WHEN count() > 2000 THEN 'EXCESSIVE_SPANS'
+				WHEN countIf(has_error = 1) > count() * 0.5 THEN 'HIGH_ERROR_RATE'
+				WHEN max(duration_nano) > 30000000000 THEN 'EXTREMELY_SLOW'
+				WHEN uniq(serviceName) > 20 THEN 'TOO_MANY_SERVICES'
+				WHEN count() > 500 AND max(duration_nano) > 10000000000 THEN 'LONG_AND_SLOW'
+				WHEN countIf(duration_nano > 5000000000) > 10 THEN 'MULTIPLE_SLOW_SPANS'
+				ELSE 'OTHER_ANOMALY'
+			END as anomaly_type,
+			round((max(duration_nano) - min(duration_nano))/1000000, 2) as trace_duration_ms
+		FROM signoz_traces.signoz_index_v3
+		WHERE timestamp >= now() - INTERVAL ? HOUR
+		GROUP BY trace_id
+		HAVING 
+			count() > 1000 OR 
+			countIf(has_error = 1) > 5 OR 
+			max(duration_nano) > 10000000000 OR
+			uniq(serviceName) > 15 OR
+			countIf(duration_nano > 5000000000) > 5
+		ORDER BY 
+			CASE anomaly_type
+				WHEN 'EXCESSIVE_SPANS' THEN 1
+				WHEN 'HIGH_ERROR_RATE' THEN 2
+				WHEN 'EXTREMELY_SLOW' THEN 3
+				WHEN 'TOO_MANY_SERVICES' THEN 4
+				WHEN 'LONG_AND_SLOW' THEN 5
+				WHEN 'MULTIPLE_SLOW_SPANS' THEN 6
+				ELSE 7
+			END,
+			span_count DESC
+		LIMIT ?`
+
+	rows, err := conn.Query(ctx, sql, timeRangeHours, limit)
+	if err != nil {
+		return mcp.NewToolResultText(fmt.Sprintf("查询异常trace失败: %v", err)), err
+	}
+	defer rows.Close()
+	type AnomalyTrace struct {
+		TraceID         string  `json:"trace_id"`
+		SpanCount       uint64  `json:"span_count"`
+		MaxDurationMs   float64 `json:"max_duration_ms"`
+		AvgDurationMs   float64 `json:"avg_duration_ms"`
+		ErrorCount      uint64  `json:"error_count"`
+		ServiceCount    uint64  `json:"service_count"`
+		OperationCount  uint64  `json:"operation_count"`
+		TraceDurationMs float64 `json:"trace_duration_ms"`
+		AnomalyType     string  `json:"anomaly_type"`
+	}
+
+	var anomalies []AnomalyTrace
+	anomalyStats := make(map[string]int)
+
+	for rows.Next() {
+		var anomaly AnomalyTrace
+		var traceDurationNano uint64
+		if rows.Scan(&anomaly.TraceID, &anomaly.SpanCount, &anomaly.MaxDurationMs, &anomaly.AvgDurationMs,
+			&anomaly.ErrorCount, &anomaly.ServiceCount, &anomaly.OperationCount, &traceDurationNano,
+			&anomaly.AnomalyType, &anomaly.TraceDurationMs) == nil {
+			anomalies = append(anomalies, anomaly)
+			anomalyStats[anomaly.AnomalyType]++
+		}
+	}
+
+	result := map[string]interface{}{
+		"query_time_range_hours": timeRangeHours,
+		"total_found":            len(anomalies),
+		"anomaly_statistics":     anomalyStats,
+		"anomaly_traces":         anomalies,
+	}
+
+	out, _ := json.MarshalIndent(result, "", "  ")
+	return mcp.NewToolResultText(string(out)), nil
+}
+
+// AnalyzeServiceDependenciesTool 分析服务间的调用关系和依赖模式
+func AnalyzeServiceDependenciesTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	serviceName := request.Params.Arguments["service_name"].(string)
+
+	// 获取时间范围，默认1小时
+	timeRangeHours := 1.0
+	if timeVal, ok := request.Params.Arguments["time_range_hours"]; ok && timeVal != nil {
+		if timeFloat, ok := timeVal.(float64); ok {
+			timeRangeHours = timeFloat
+		}
+	}
+
+	limit := int(request.Params.Arguments["limit"].(float64))
+
+	conn, err := NewClient()
+	if err != nil {
+		return mcp.NewToolResultText(fmt.Sprintf("连接 ClickHouse 失败: %v", err)), err
+	}
+	defer conn.Close()
+	// 使用ClickHouse的时间函数避免溢出问题
+	// 1. 查找该服务调用的下游服务
+	downstreamSQL := `
+		SELECT 
+			downstream.serviceName as downstream_service,
+			count() as call_count,
+			round(avg(downstream.duration_nano)/1000000, 2) as avg_duration_ms,
+			round(max(downstream.duration_nano)/1000000, 2) as max_duration_ms,
+			countIf(downstream.has_error = 1) as error_count,
+			uniq(downstream.trace_id) as unique_traces,
+			round(countIf(downstream.has_error = 1) * 100.0 / count(), 2) as error_rate_pct
+		FROM signoz_traces.signoz_index_v3 upstream
+		JOIN signoz_traces.signoz_index_v3 downstream ON upstream.trace_id = downstream.trace_id
+		WHERE upstream.serviceName = ?
+		  AND downstream.serviceName != ?
+		  AND upstream.timestamp >= now() - INTERVAL ? HOUR
+		  AND downstream.timestamp >= now() - INTERVAL ? HOUR
+		  AND downstream.timestamp > upstream.timestamp
+		GROUP BY downstream.serviceName
+		ORDER BY call_count DESC
+		LIMIT ?`
+
+	downstreamRows, err := conn.Query(ctx, downstreamSQL, serviceName, serviceName, timeRangeHours, timeRangeHours, limit)
+	if err != nil {
+		return mcp.NewToolResultText(fmt.Sprintf("查询下游服务失败: %v", err)), err
+	}
+	defer downstreamRows.Close()
+
+	type ServiceDependency struct {
+		ServiceName   string  `json:"service_name"`
+		CallCount     uint64  `json:"call_count"`
+		AvgDurationMs float64 `json:"avg_duration_ms"`
+		MaxDurationMs float64 `json:"max_duration_ms"`
+		ErrorCount    uint64  `json:"error_count"`
+		UniqueTraces  uint64  `json:"unique_traces"`
+		ErrorRatePct  float64 `json:"error_rate_pct"`
+	}
+
+	var downstreamServices []ServiceDependency
+	for downstreamRows.Next() {
+		var dep ServiceDependency
+		if err := downstreamRows.Scan(&dep.ServiceName, &dep.CallCount, &dep.AvgDurationMs,
+			&dep.MaxDurationMs, &dep.ErrorCount, &dep.UniqueTraces, &dep.ErrorRatePct); err == nil {
+			downstreamServices = append(downstreamServices, dep)
+		}
+	}
+	// 2. 查找调用该服务的上游服务
+	upstreamSQL := `
+		SELECT 
+			upstream.serviceName as upstream_service,
+			count() as call_count,
+			round(avg(downstream.duration_nano)/1000000, 2) as avg_response_time_ms,
+			countIf(downstream.has_error = 1) as error_count,
+			uniq(upstream.trace_id) as unique_traces,
+			round(countIf(downstream.has_error = 1) * 100.0 / count(), 2) as error_rate_pct
+		FROM signoz_traces.signoz_index_v3 upstream
+		JOIN signoz_traces.signoz_index_v3 downstream ON upstream.trace_id = downstream.trace_id
+		WHERE downstream.serviceName = ?
+		  AND upstream.serviceName != ?
+		  AND upstream.timestamp >= now() - INTERVAL ? HOUR
+		  AND downstream.timestamp >= now() - INTERVAL ? HOUR
+		  AND downstream.timestamp > upstream.timestamp
+		GROUP BY upstream.serviceName
+		ORDER BY call_count DESC
+		LIMIT ?`
+
+	upstreamRows, err := conn.Query(ctx, upstreamSQL, serviceName, serviceName, timeRangeHours, timeRangeHours, limit)
+	if err != nil {
+		return mcp.NewToolResultText(fmt.Sprintf("查询上游服务失败: %v", err)), err
+	}
+	defer upstreamRows.Close()
+
+	var upstreamServices []ServiceDependency
+	for upstreamRows.Next() {
+		var dep ServiceDependency
+		if err := upstreamRows.Scan(&dep.ServiceName, &dep.CallCount, &dep.AvgDurationMs,
+			&dep.MaxDurationMs, &dep.ErrorCount, &dep.UniqueTraces, &dep.ErrorRatePct); err == nil {
+			upstreamServices = append(upstreamServices, dep)
+		}
+	}
+
+	// 3. 分析调用模式和健康状况
+	var healthIssues []string
+	var recommendations []string
+
+	for _, dep := range downstreamServices {
+		if dep.ErrorRatePct > 10 {
+			healthIssues = append(healthIssues, fmt.Sprintf("下游服务 %s 错误率过高: %.2f%%", dep.ServiceName, dep.ErrorRatePct))
+		}
+		if dep.AvgDurationMs > 5000 {
+			healthIssues = append(healthIssues, fmt.Sprintf("下游服务 %s 响应时间过长: %.2fms", dep.ServiceName, dep.AvgDurationMs))
+		}
+	}
+
+	for _, dep := range upstreamServices {
+		if dep.ErrorRatePct > 10 {
+			healthIssues = append(healthIssues, fmt.Sprintf("上游服务 %s 调用失败率过高: %.2f%%", dep.ServiceName, dep.ErrorRatePct))
+		}
+	}
+
+	if len(downstreamServices) > 10 {
+		recommendations = append(recommendations, "考虑减少下游依赖数量，简化服务架构")
+	}
+
+	if len(upstreamServices) > 15 {
+		recommendations = append(recommendations, "该服务被过多上游服务依赖，考虑拆分功能")
+	}
+
+	result := map[string]interface{}{
+		"service_name":           serviceName,
+		"query_time_range_hours": timeRangeHours,
+		"downstream_services":    downstreamServices,
+		"upstream_services":      upstreamServices,
+		"dependency_summary": map[string]interface{}{
+			"downstream_count": len(downstreamServices),
+			"upstream_count":   len(upstreamServices),
+			"health_issues":    healthIssues,
+			"recommendations":  recommendations,
+		},
+	}
+
+	out, _ := json.MarshalIndent(result, "", "  ")
+	return mcp.NewToolResultText(string(out)), nil
 }
