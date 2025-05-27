@@ -3,8 +3,8 @@ package main
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"encoding/json" // 用于JSON编解码
+	"fmt"
 	"log"
 	"net/http" // 用于HTTP服务器
 	"os"
@@ -23,6 +23,8 @@ import (
 	// 本地包导入
 	"mcp-devops/client/pkg/mcp"
 	"mcp-devops/client/pkg/model"
+
+	modelEino "github.com/cloudwego/eino/components/model"
 )
 
 // Alertmanager webhook 结构体定义
@@ -53,13 +55,13 @@ type AlertmanagerWebhookMessage struct {
 }
 
 const (
-	maxRetries      = 5  // 最大重试次数
-	retryInterval   = 5  // 重试间隔(秒)
-	agentTimeout    = 90 // 代理执行超时时间(秒)
-	toolTimeout     = 30 // 工具执行超时时间(秒)
-	toolUpdateTime  = 30 // 工具更新间隔(分钟)
-	maxHistoryItems = 10 // 最大历史记录条数
-	reconnectBuffer = 5  // 重连通道缓冲区大小
+	maxRetries      = 5   // 最大重试次数
+	retryInterval   = 5   // 重试间隔(秒)
+	agentTimeout    = 180 // 代理执行超时时间(秒), 增加以处理较长的SSH操作
+	toolTimeout     = 60  // 工具执行超时时间(秒), 增加以处理较长的命令执行
+	toolUpdateTime  = 30  // 工具更新间隔(分钟)
+	maxHistoryItems = 10  // 最大历史记录条数
+	reconnectBuffer = 5   // 重连通道缓冲区大小
 )
 
 // Debug 是否开启调试模式
@@ -160,8 +162,8 @@ func (app *Application) handleWebhook(w http.ResponseWriter, r *http.Request) {
 			promptBuilder.WriteString(fmt.Sprintf("  其他标签: %s\n", otherLabelDetails))
 		}
 	}
-	// **明确指示 AI 使用工具发送到企业微信**
-	promptBuilder.WriteString("\n请对上述告警进行分析总结，在告警中含有信息，你可以先去查看对应资源的日志和事件，仔细分析之后 ，再使用【发送企业微信消息】工具将分析结果发送出去。")
+	// **明确指示 AI 使用工具发送到企业微信，并针对中间件相关告警调用诊断工具**
+	promptBuilder.WriteString("\n请对上述告警进行分析总结，在告警中含有信息，你可以先结合当前的工具进行排查获取信息。如果告警与中间件相关（如Redis、数据库、消息队列等），请使用相关的诊断工具（如redis_info、redis_slowlog、redis_bigkeys等）收集更多信息以便深入分析。仔细分析之后，再使用【发送企业微信消息】工具将分析结果发送出去。")
 	// --- Prompt 构造结束 ---
 
 	// 将构造好的 prompt 发送到通道
@@ -230,7 +232,32 @@ func (app *Application) Initialize() error {
 
 	# 系统能力
 	你可以管理Kubernetes资源，包括：
-	- Kubernetes: Pod、Deployment、Service、命名空间等资源管理
+	- Kubernetes: Pod、Deployment、Service、StatefulSet、Ingress、ConfigMap、Secret等资源管理
+	- 故障诊断: 集群健康检查、Pod/节点/Deployment诊断、告警分析
+	- Linux系统: 系统信息、进程管理、资源监控、网络诊断、日志分析
+	- Kubernetes组件: Kubelet、容器运行时、Kube-Proxy、CNI等状态检查
+
+	# 主要职责
+	1. Kubernetes资源管理：
+	   - 创建、查看、更新和删除各类Kubernetes资源
+	   - 确保操作安全，避免意外删除或修改关键资源
+
+	2. 告警监控与干预：
+	   - 分析Prometheus/Alertmanager发送的告警信息
+	   - 主动诊断告警相关的资源（Pod、节点等）
+	   - 查看相关日志和事件，确定根本原因
+	   - 提供解决方案并通过企业微信发送分析结果
+
+	3. 故障排查与修复：
+	   - 诊断Pod崩溃、节点不可用、网络问题等常见故障
+	   - 分析系统日志、容器日志和事件
+	   - 提供详细的故障分析报告和修复建议
+	   - 在必要时执行修复操作（重启Pod、扩展资源等）
+
+	4. 集群健康监控：
+	   - 监控节点状态、Pod运行情况和资源使用率
+	   - 检查Kubernetes核心组件（kubelet、容器运行时等）
+	   - 识别潜在问题并提供预防性建议
 
 	# 命令规则
 	0. 记住永远不能一次执行多个命令，你应该执行一个命令等待结果后才执行下一个命令
@@ -257,10 +284,24 @@ func (app *Application) Initialize() error {
 	  - 执行stop、restart、remove等操作时可能需要较长时间
 	  - 如果执行命令后长时间没有响应，可能是服务器处理超时
 	  - 建议用户再次查看资源状态确认操作是否成功
+
 	5. pod名称：
 	  - 有时候用户只会输入pod名称中去除随机生成的内容，你要能识别出来
 	  - 如果要查看pod或者容器日志，你应该知道pod中有哪些容器，哪个容器是用户想要的
 	  - 有时候用户给的pod名称不全，你需要自己判断是否存在名称相近的pod
+
+	6. 告警处理流程：
+	  - 收到告警后，首先分析告警的严重性和类型
+	  - 使用诊断工具检查相关资源状态（pod_diagnostic、node_diagnostic等）
+	  - 查看相关日志和事件，确定根本原因
+	  - 提供详细的分析报告，包括问题描述、原因分析和解决建议
+	  - 使用send_wechat_message工具将分析结果发送到企业微信
+
+	7. 故障排查步骤：
+	  - 对于Pod问题：检查Pod状态、容器日志、事件和资源使用情况
+	  - 对于节点问题：检查节点状态、资源使用率、kubelet日志和系统日志
+	  - 对于网络问题：检查CNI状态、网络连接性和相关组件日志
+	  - 对于应用问题：检查Deployment/StatefulSet状态、服务配置和Ingress设置
 
 	示例对话：
 	用户：删除所有停止的容器
@@ -268,6 +309,12 @@ func (app *Application) Initialize() error {
 
 	用户：查看所有的Kubernetes命名空间
 	你：我将获取所有Kubernetes命名空间列表。
+
+	用户：有一个Pod一直重启，怎么办？
+	你：我来帮您诊断这个问题。请告诉我Pod的名称和所在的命名空间，我会检查Pod状态、查看容器日志和相关事件，找出重启的原因。
+
+	用户：收到CPU使用率高的告警
+	你：我会分析这个CPU使用率高的告警。首先，我需要确认是哪个节点或Pod出现了CPU使用率高的问题，然后使用诊断工具检查资源使用情况，查看相关日志，并提供分析结果和解决建议。
 	`,
 	})
 
@@ -314,15 +361,27 @@ func (app *Application) updateToolsWithContext(ctx context.Context, verbose bool
 
 	app.lastUpdateTime = time.Now()
 
-	// 初始化聊天模型
-	cm := model.NewChatModel(
-		ctx, // 使用传入的上下文
-		os.Getenv("OPENAI_API_KEY"),
-		os.Getenv("OPENAI_BASE_URL"),
-		os.Getenv("OPENAI_MODEL"),
-	)
+	modelType := os.Getenv("MODEL_TYPE")
+	if modelType == "" {
+		modelType = "openai"
+	}
 
-	// 初始化代理
+	var cm modelEino.ChatModel
+	if modelType == "ollama" {
+		cm = model.NewOllamaModel(
+			ctx,
+			os.Getenv("OLLAMA_BASE_URL"),
+			os.Getenv("OLLAMA_MODEL"),
+		)
+	} else {
+		cm = model.NewChatModel(
+			ctx,
+			os.Getenv("OPENAI_API_KEY"),
+			os.Getenv("OPENAI_BASE_URL"),
+			os.Getenv("OPENAI_MODEL"),
+		)
+	}
+
 	app.runner, err = react.NewAgent(ctx, &react.AgentConfig{
 		Model: cm,
 		ToolsConfig: compose.ToolsNodeConfig{
