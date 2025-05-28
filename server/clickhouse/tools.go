@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -188,6 +189,36 @@ func AddClickhouseTools(svr *server.MCPServer) {
 			mcp.DefaultNumber(10),
 		),
 	), AnalyzeServiceInterfaceLoadTool)
+
+	// 获取Signoz中的服务列表
+	svr.AddTool(mcp.NewTool("list_services",
+		mcp.WithDescription("获取Signoz中所有可用的服务列表，包括基本统计信息"),
+		mcp.WithNumber("time_range_hours",
+			mcp.Description("统计时间范围（小时），默认为24小时"),
+			mcp.DefaultNumber(24),
+		),
+		mcp.WithNumber("limit",
+			mcp.Description("返回服务数量限制，默认为100"),
+			mcp.DefaultNumber(100),
+		),
+	), ListServicesTool)
+
+	// 获取指定服务的接口列表
+	svr.AddTool(mcp.NewTool("list_service_interfaces",
+		mcp.WithDescription("获取指定服务的所有接口列表及其基本统计信息"),
+		mcp.WithString("service_name",
+			mcp.Description("要查询的服务名称"),
+			mcp.Required(),
+		),
+		mcp.WithNumber("time_range_hours",
+			mcp.Description("统计时间范围（小时），默认为24小时"),
+			mcp.DefaultNumber(24),
+		),
+		mcp.WithNumber("limit",
+			mcp.Description("返回接口数量限制，默认为100"),
+			mcp.DefaultNumber(100),
+		),
+	), ListServiceInterfacesTool)
 }
 
 // FindHeavyTracesTool 列出 span 数量超过阈值的 trace_id（支持时间范围）
@@ -530,12 +561,12 @@ func AnalyzeTraceTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.Ca
 		WHERE trace_id = ? 
 		ORDER BY timestamp ASC 
 		LIMIT %d`, limit)
-
 	spansRows, err := conn.Query(ctx, spansSQL, tid)
 	if err != nil {
 		return mcp.NewToolResultText(fmt.Sprintf("查询 spans 失败: %v", err)), err
 	}
 	defer spansRows.Close()
+
 	type SpanInfo struct {
 		SpanID       string `json:"span_id"`
 		ParentSpanID string `json:"parent_span_id"`
@@ -793,6 +824,7 @@ func DeepAnalyzeTraceTool(ctx context.Context, request mcp.CallToolRequest) (*mc
 	if err != nil {
 		return mcp.NewToolResultText(fmt.Sprintf("服务分析查询失败: %v", err)), err
 	}
+	defer serviceRows.Close()
 
 	type ServiceBehavior struct {
 		ServiceName   string  `json:"service_name"`
@@ -1555,24 +1587,339 @@ func AnalyzeServiceDependenciesTool(ctx context.Context, request mcp.CallToolReq
 	return mcp.NewToolResultText(string(out)), nil
 }
 
-// AnalyzeServiceInterfaceLoadTool 分析指定服务的接口负载，找到负载最重的top 10 trace
-func AnalyzeServiceInterfaceLoadTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	serviceName := request.Params.Arguments["service_name"].(string)
-
-	// 获取特定接口名称（可选）
-	var interfaceName string
-	if interfaceVal, ok := request.Params.Arguments["interface_name"]; ok && interfaceVal != nil {
-		if interfaceStr, ok := interfaceVal.(string); ok {
-			interfaceName = interfaceStr
+// ListServicesTool 获取Signoz中所有可用的服务列表及其基本统计信息
+func ListServicesTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// 获取时间范围，默认24小时
+	timeRangeHours := 24.0
+	if timeVal, ok := request.Params.Arguments["time_range_hours"]; ok && timeVal != nil {
+		if timeFloat, ok := timeVal.(float64); ok {
+			timeRangeHours = timeFloat
 		}
 	}
 
-	// helper function
-	min := func(a, b int) int {
-		if a < b {
-			return a
+	// 获取限制数量，默认100
+	limit := 100
+	if limitVal, ok := request.Params.Arguments["limit"]; ok && limitVal != nil {
+		if limitFloat, ok := limitVal.(float64); ok {
+			limit = int(limitFloat)
 		}
-		return b
+	}
+
+	conn, err := NewClient()
+	if err != nil {
+		return mcp.NewToolResultText(fmt.Sprintf("连接 ClickHouse 失败: %v", err)), err
+	}
+	defer conn.Close()
+
+	// 查询所有服务及其基本统计信息
+	servicesSQL := `
+		SELECT 
+			serviceName as service_name,
+			count() as total_spans,
+			uniq(trace_id) as unique_traces,
+			uniq(name) as unique_operations,
+			round(avg(duration_nano)/1000000, 2) as avg_duration_ms,
+			round(max(duration_nano)/1000000, 2) as max_duration_ms,
+			countIf(has_error = 1) as error_spans,
+			round(countIf(has_error = 1) * 100.0 / count(), 2) as error_rate_pct,
+			round(count() / ?, 2) as spans_per_hour,
+			min(timestamp) as first_seen,
+			max(timestamp) as last_seen
+		FROM signoz_traces.signoz_index_v3
+		WHERE timestamp >= now() - INTERVAL ? HOUR
+		  AND serviceName != ''
+		GROUP BY serviceName
+		HAVING total_spans > 0
+		ORDER BY total_spans DESC
+		LIMIT ?
+	`
+
+	type ServiceInfo struct {
+		ServiceName      string    `json:"service_name"`
+		TotalSpans       uint64    `json:"total_spans"`
+		UniqueTraces     uint64    `json:"unique_traces"`
+		UniqueOperations uint64    `json:"unique_operations"`
+		AvgDurationMs    float64   `json:"avg_duration_ms"`
+		MaxDurationMs    float64   `json:"max_duration_ms"`
+		ErrorSpans       uint64    `json:"error_spans"`
+		ErrorRatePct     float64   `json:"error_rate_pct"`
+		SpansPerHour     float64   `json:"spans_per_hour"`
+		FirstSeen        time.Time `json:"first_seen"`
+		LastSeen         time.Time `json:"last_seen"`
+		HealthStatus     string    `json:"health_status"`
+		ActivityLevel    string    `json:"activity_level"`
+	}
+
+	serviceRows, err := conn.Query(ctx, servicesSQL, timeRangeHours, timeRangeHours, limit)
+	if err != nil {
+		return mcp.NewToolResultText(fmt.Sprintf("查询服务列表失败: %v", err)), err
+	}
+	defer serviceRows.Close()
+
+	var services []ServiceInfo
+	for serviceRows.Next() {
+		var service ServiceInfo
+		if err := serviceRows.Scan(&service.ServiceName, &service.TotalSpans, &service.UniqueTraces,
+			&service.UniqueOperations, &service.AvgDurationMs, &service.MaxDurationMs,
+			&service.ErrorSpans, &service.ErrorRatePct, &service.SpansPerHour,
+			&service.FirstSeen, &service.LastSeen); err == nil {
+
+			// 评估健康状态
+			if service.ErrorRatePct > 10 || service.AvgDurationMs > 5000 {
+				service.HealthStatus = "CRITICAL"
+			} else if service.ErrorRatePct > 5 || service.AvgDurationMs > 2000 {
+				service.HealthStatus = "WARNING"
+			} else if service.ErrorRatePct > 1 || service.AvgDurationMs > 1000 {
+				service.HealthStatus = "ATTENTION"
+			} else {
+				service.HealthStatus = "HEALTHY"
+			}
+
+			// 评估活跃程度
+			if service.SpansPerHour > 1000 {
+				service.ActivityLevel = "HIGH"
+			} else if service.SpansPerHour > 100 {
+				service.ActivityLevel = "MEDIUM"
+			} else {
+				service.ActivityLevel = "LOW"
+			}
+
+			services = append(services, service)
+		}
+	}
+
+	// 生成统计摘要
+	var totalSpans, totalTraces uint64
+	healthCounts := map[string]int{"HEALTHY": 0, "ATTENTION": 0, "WARNING": 0, "CRITICAL": 0}
+	activityCounts := map[string]int{"HIGH": 0, "MEDIUM": 0, "LOW": 0}
+
+	for _, service := range services {
+		totalSpans += service.TotalSpans
+		totalTraces += service.UniqueTraces
+		healthCounts[service.HealthStatus]++
+		activityCounts[service.ActivityLevel]++
+	}
+
+	result := map[string]interface{}{
+		"query_time_range_hours": timeRangeHours,
+		"query_timestamp":        time.Now().Format(time.RFC3339),
+		"services":               services,
+		"summary": map[string]interface{}{
+			"total_services":        len(services),
+			"total_spans":           totalSpans,
+			"total_traces":          totalTraces,
+			"health_distribution":   healthCounts,
+			"activity_distribution": activityCounts,
+		},
+	}
+
+	out, _ := json.MarshalIndent(result, "", "  ")
+	return mcp.NewToolResultText(string(out)), nil
+}
+
+// ListServiceInterfacesTool 获取指定服务的所有接口列表及其基本统计信息
+func ListServiceInterfacesTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	serviceName := request.Params.Arguments["service_name"].(string)
+
+	// 获取时间范围，默认24小时
+	timeRangeHours := 24.0
+	if timeVal, ok := request.Params.Arguments["time_range_hours"]; ok && timeVal != nil {
+		if timeFloat, ok := timeVal.(float64); ok {
+			timeRangeHours = timeFloat
+		}
+	}
+
+	// 获取限制数量，默认100
+	limit := 100
+	if limitVal, ok := request.Params.Arguments["limit"]; ok && limitVal != nil {
+		if limitFloat, ok := limitVal.(float64); ok {
+			limit = int(limitFloat)
+		}
+	}
+
+	conn, err := NewClient()
+	if err != nil {
+		return mcp.NewToolResultText(fmt.Sprintf("连接 ClickHouse 失败: %v", err)), err
+	}
+	defer conn.Close()
+
+	// 查询指定服务的所有接口及其统计信息
+	interfacesSQL := `
+		SELECT 
+			name as interface_name,
+			count() as total_calls,
+			uniq(trace_id) as unique_traces,
+			round(avg(duration_nano)/1000000, 2) as avg_duration_ms,
+			round(max(duration_nano)/1000000, 2) as max_duration_ms,
+			round(min(duration_nano)/1000000, 2) as min_duration_ms,
+			quantile(0.5)(duration_nano/1000000) as p50_duration_ms,
+			quantile(0.95)(duration_nano/1000000) as p95_duration_ms,
+			quantile(0.99)(duration_nano/1000000) as p99_duration_ms,
+			countIf(has_error = 1) as error_calls,
+			round(countIf(has_error = 1) * 100.0 / count(), 2) as error_rate_pct,
+			round(count() / ?, 2) as calls_per_hour,
+			min(timestamp) as first_seen,
+			max(timestamp) as last_seen,
+			CASE 
+				WHEN count() > 1000 THEN 'HIGH_FREQUENCY'
+				WHEN count() > 100 THEN 'MEDIUM_FREQUENCY'
+				ELSE 'LOW_FREQUENCY'
+			END as frequency_pattern,
+			CASE 
+				WHEN avg(duration_nano) > 1000000000 THEN 'SLOW'
+				WHEN avg(duration_nano) > 500000000 THEN 'MODERATE'
+				ELSE 'FAST'
+			END as performance_pattern
+		FROM signoz_traces.signoz_index_v3
+		WHERE serviceName = ? 
+		  AND timestamp >= now() - INTERVAL ? HOUR
+		  AND name != ''
+		GROUP BY name
+		HAVING total_calls > 0
+		ORDER BY total_calls DESC
+		LIMIT ?
+	`
+
+	type InterfaceDetail struct {
+		InterfaceName      string    `json:"interface_name"`
+		TotalCalls         uint64    `json:"total_calls"`
+		UniqueTraces       uint64    `json:"unique_traces"`
+		AvgDurationMs      float64   `json:"avg_duration_ms"`
+		MaxDurationMs      float64   `json:"max_duration_ms"`
+		MinDurationMs      float64   `json:"min_duration_ms"`
+		P50DurationMs      float64   `json:"p50_duration_ms"`
+		P95DurationMs      float64   `json:"p95_duration_ms"`
+		P99DurationMs      float64   `json:"p99_duration_ms"`
+		ErrorCalls         uint64    `json:"error_calls"`
+		ErrorRatePct       float64   `json:"error_rate_pct"`
+		CallsPerHour       float64   `json:"calls_per_hour"`
+		FirstSeen          time.Time `json:"first_seen"`
+		LastSeen           time.Time `json:"last_seen"`
+		FrequencyPattern   string    `json:"frequency_pattern"`
+		PerformancePattern string    `json:"performance_pattern"`
+		HealthStatus       string    `json:"health_status"`
+		IssueDescription   string    `json:"issue_description"`
+	}
+
+	interfaceRows, err := conn.Query(ctx, interfacesSQL, timeRangeHours, serviceName, timeRangeHours, limit)
+	if err != nil {
+		return mcp.NewToolResultText(fmt.Sprintf("查询服务接口失败: %v", err)), err
+	}
+	defer interfaceRows.Close()
+
+	var interfaces []InterfaceDetail
+	for interfaceRows.Next() {
+		var iface InterfaceDetail
+		if err := interfaceRows.Scan(&iface.InterfaceName, &iface.TotalCalls, &iface.UniqueTraces,
+			&iface.AvgDurationMs, &iface.MaxDurationMs, &iface.MinDurationMs,
+			&iface.P50DurationMs, &iface.P95DurationMs, &iface.P99DurationMs,
+			&iface.ErrorCalls, &iface.ErrorRatePct, &iface.CallsPerHour,
+			&iface.FirstSeen, &iface.LastSeen, &iface.FrequencyPattern, &iface.PerformancePattern); err == nil {
+
+			// 评估健康状态和问题描述
+			var issues []string
+			if iface.ErrorRatePct > 10 {
+				iface.HealthStatus = "CRITICAL"
+				issues = append(issues, fmt.Sprintf("高错误率(%.2f%%)", iface.ErrorRatePct))
+			} else if iface.ErrorRatePct > 5 {
+				iface.HealthStatus = "WARNING"
+				issues = append(issues, fmt.Sprintf("错误率偏高(%.2f%%)", iface.ErrorRatePct))
+			} else if iface.P95DurationMs > 5000 {
+				iface.HealthStatus = "WARNING"
+				issues = append(issues, fmt.Sprintf("P95延迟过高(%.2fms)", iface.P95DurationMs))
+			} else if iface.P95DurationMs > 2000 || iface.ErrorRatePct > 1 {
+				iface.HealthStatus = "ATTENTION"
+				if iface.P95DurationMs > 2000 {
+					issues = append(issues, fmt.Sprintf("P95延迟较高(%.2fms)", iface.P95DurationMs))
+				}
+				if iface.ErrorRatePct > 1 {
+					issues = append(issues, fmt.Sprintf("存在少量错误(%.2f%%)", iface.ErrorRatePct))
+				}
+			} else {
+				iface.HealthStatus = "HEALTHY"
+			}
+
+			// 检查其他潜在问题
+			if iface.CallsPerHour > 1000 {
+				issues = append(issues, fmt.Sprintf("调用频率过高(%.0f/小时)", iface.CallsPerHour))
+			}
+			if iface.MaxDurationMs > 30000 {
+				issues = append(issues, fmt.Sprintf("最大耗时极长(%.2fms)", iface.MaxDurationMs))
+			}
+
+			if len(issues) > 0 {
+				iface.IssueDescription = fmt.Sprintf("%v", issues)
+			} else {
+				iface.IssueDescription = "无明显问题"
+			}
+
+			interfaces = append(interfaces, iface)
+		}
+	}
+
+	// 检查服务是否存在
+	if len(interfaces) == 0 {
+		return mcp.NewToolResultText(fmt.Sprintf("未找到服务 '%s' 在过去 %.1f 小时内的接口数据。请检查服务名称是否正确。", serviceName, timeRangeHours)), nil
+	}
+
+	// 生成统计摘要
+	var totalCalls, totalTraces uint64
+	healthCounts := map[string]int{"HEALTHY": 0, "ATTENTION": 0, "WARNING": 0, "CRITICAL": 0}
+	frequencyCounts := map[string]int{"HIGH_FREQUENCY": 0, "MEDIUM_FREQUENCY": 0, "LOW_FREQUENCY": 0}
+	performanceCounts := map[string]int{"FAST": 0, "MODERATE": 0, "SLOW": 0}
+
+	for _, iface := range interfaces {
+		totalCalls += iface.TotalCalls
+		totalTraces += iface.UniqueTraces
+		healthCounts[iface.HealthStatus]++
+		frequencyCounts[iface.FrequencyPattern]++
+		performanceCounts[iface.PerformancePattern]++
+	}
+
+	// 生成建议
+	var recommendations []string
+	if healthCounts["CRITICAL"] > 0 {
+		recommendations = append(recommendations, fmt.Sprintf("发现 %d 个关键问题接口，需要立即处理", healthCounts["CRITICAL"]))
+	}
+	if healthCounts["WARNING"] > 0 {
+		recommendations = append(recommendations, fmt.Sprintf("发现 %d 个预警接口，建议及时优化", healthCounts["WARNING"]))
+	}
+	if performanceCounts["SLOW"] > 0 {
+		recommendations = append(recommendations, fmt.Sprintf("发现 %d 个慢接口，建议性能优化", performanceCounts["SLOW"]))
+	}
+	if frequencyCounts["HIGH_FREQUENCY"] > 3 {
+		recommendations = append(recommendations, "多个高频接口，考虑添加缓存或负载均衡")
+	}
+
+	result := map[string]interface{}{
+		"service_name":           serviceName,
+		"query_time_range_hours": timeRangeHours,
+		"query_timestamp":        time.Now().Format(time.RFC3339),
+		"interfaces":             interfaces,
+		"summary": map[string]interface{}{
+			"total_interfaces":         len(interfaces),
+			"total_calls":              totalCalls,
+			"total_traces":             totalTraces,
+			"health_distribution":      healthCounts,
+			"frequency_distribution":   frequencyCounts,
+			"performance_distribution": performanceCounts,
+		},
+		"recommendations": recommendations,
+	}
+	out, _ := json.MarshalIndent(result, "", "  ")
+	return mcp.NewToolResultText(string(out)), nil
+}
+
+// AnalyzeServiceInterfaceLoadTool 分析指定服务的接口负载，找到指定时间内负载最重的top trace
+func AnalyzeServiceInterfaceLoadTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	serviceName := request.Params.Arguments["service_name"].(string)
+
+	// 获取接口名称（可选）
+	var interfaceName string
+	if ifaceVal, ok := request.Params.Arguments["interface_name"]; ok && ifaceVal != nil {
+		if ifaceStr, ok := ifaceVal.(string); ok {
+			interfaceName = ifaceStr
+		}
 	}
 
 	// 获取时间范围，默认2小时
@@ -1583,11 +1930,11 @@ func AnalyzeServiceInterfaceLoadTool(ctx context.Context, request mcp.CallToolRe
 		}
 	}
 
-	// 获取top数量，默认10
+	// 获取返回数量，默认10
 	topCount := 10
-	if topVal, ok := request.Params.Arguments["top_count"]; ok && topVal != nil {
-		if topFloat, ok := topVal.(float64); ok {
-			topCount = int(topFloat)
+	if countVal, ok := request.Params.Arguments["top_count"]; ok && countVal != nil {
+		if countFloat, ok := countVal.(float64); ok {
+			topCount = int(countFloat)
 		}
 	}
 
@@ -1596,134 +1943,78 @@ func AnalyzeServiceInterfaceLoadTool(ctx context.Context, request mcp.CallToolRe
 		return mcp.NewToolResultText(fmt.Sprintf("连接 ClickHouse 失败: %v", err)), err
 	}
 	defer conn.Close()
-	// 1. 首先分析服务的接口概览
-	interfaceOverviewSQL := `
-		SELECT 
-			name as interface_name,
-			count() as total_calls,
-			uniq(trace_id) as unique_traces,
-			round(avg(duration_nano)/1000000, 2) as avg_duration_ms,
-			round(max(duration_nano)/1000000, 2) as max_duration_ms,
-			countIf(has_error = 1) as error_count,
-			round(countIf(has_error = 1) * 100.0 / count(), 2) as error_rate_pct,
-			round(count() / ?, 2) as calls_per_hour
-		FROM signoz_traces.signoz_index_v3
-		WHERE serviceName = ? 
-		  AND timestamp >= now() - INTERVAL ? HOUR`
 
-	// 如果指定了特定接口，添加接口过滤条件
-	var interfaceParams []interface{}
-	interfaceParams = append(interfaceParams, timeRangeHours, serviceName, timeRangeHours)
+	// 构建查询条件
+	conditions := []string{"serviceName = ?"}
+	queryArgs := []interface{}{serviceName}
 
 	if interfaceName != "" {
-		interfaceOverviewSQL += ` AND name = ?`
-		interfaceParams = append(interfaceParams, interfaceName)
+		conditions = append(conditions, "name = ?")
+		queryArgs = append(queryArgs, interfaceName)
 	}
 
-	interfaceOverviewSQL += `
-		GROUP BY name
-		ORDER BY total_calls DESC
-		LIMIT 20
-	`
+	whereClause := strings.Join(conditions, " AND ")
 
-	interfaceRows, err := conn.Query(ctx, interfaceOverviewSQL, interfaceParams...)
-	if err != nil {
-		return mcp.NewToolResultText(fmt.Sprintf("查询接口概览失败: %v", err)), err
-	}
-	defer interfaceRows.Close()
-
-	type InterfaceInfo struct {
-		InterfaceName string  `json:"interface_name"`
-		TotalCalls    uint64  `json:"total_calls"`
-		UniqueTraces  uint64  `json:"unique_traces"`
-		AvgDurationMs float64 `json:"avg_duration_ms"`
-		MaxDurationMs float64 `json:"max_duration_ms"`
-		ErrorCount    uint64  `json:"error_count"`
-		ErrorRatePct  float64 `json:"error_rate_pct"`
-		CallsPerHour  float64 `json:"calls_per_hour"`
-	}
-	var interfaces []InterfaceInfo
-	for interfaceRows.Next() {
-		var inf InterfaceInfo
-		if err := interfaceRows.Scan(&inf.InterfaceName, &inf.TotalCalls, &inf.UniqueTraces,
-			&inf.AvgDurationMs, &inf.MaxDurationMs, &inf.ErrorCount, &inf.ErrorRatePct, &inf.CallsPerHour); err == nil {
-			interfaces = append(interfaces, inf)
-		}
-	}
-
-	// 如果指定了特定接口但没有找到数据，提供有用的错误信息
-	if interfaceName != "" && len(interfaces) == 0 {
-		return mcp.NewToolResultText(fmt.Sprintf("未找到服务 '%s' 中接口 '%s' 在过去 %.1f 小时内的数据。请检查接口名称是否正确或扩大时间范围。", serviceName, interfaceName, timeRangeHours)), nil
-	} // 2. 找出所有相关的trace_id，按负载排序（综合考虑span数量、持续时间、错误数等）
-	heaviestTracesSQL := `
+	// 查询负载最重的trace，考虑span数量、总耗时、错误数等因素
+	loadSQL := fmt.Sprintf(`
 		SELECT 
 			trace_id,
 			count() as span_count,
-			round(max(duration_nano)/1000000, 2) as max_duration_ms,
-			round(avg(duration_nano)/1000000, 2) as avg_duration_ms,
+			round(sum(duration_nano)/1000000, 2) as total_duration_ms,
+			round(max(duration_nano)/1000000, 2) as max_span_duration_ms,
+			round(avg(duration_nano)/1000000, 2) as avg_span_duration_ms,
 			countIf(has_error = 1) as error_count,
 			uniq(name) as operation_count,
-			uniq(serviceName) as service_count,
-			round(dateDiff('millisecond', min(timestamp), max(timestamp)), 2) as trace_duration_ms,
-			(count() * 0.4 + (max(duration_nano)/1000000) * 0.3 + countIf(has_error = 1) * 20 * 0.2 + uniq(name) * 0.1) as load_score,
+			-- 负载分数计算：span数量权重40%%，总耗时权重30%%，错误数权重20%%，操作复杂度权重10%%
+			(count() * 0.4 + (sum(duration_nano)/1000000) * 0.0003 + countIf(has_error = 1) * 50 * 0.2 + uniq(name) * 2 * 0.1) as load_score,
 			argMax(name, duration_nano) as slowest_operation,
-			any(name) as sample_operation
+			min(timestamp) as start_time,
+			max(timestamp) as end_time
 		FROM signoz_traces.signoz_index_v3
-		WHERE serviceName = ? 
-		  AND timestamp >= now() - INTERVAL ? HOUR`
-
-	// 如果指定了特定接口，添加接口过滤条件
-	var tracesParams []interface{}
-	tracesParams = append(tracesParams, serviceName, timeRangeHours)
-
-	if interfaceName != "" {
-		heaviestTracesSQL += ` AND name = ?`
-		tracesParams = append(tracesParams, interfaceName)
-	}
-
-	heaviestTracesSQL += `
+		WHERE %s AND timestamp >= now() - INTERVAL ? HOUR
 		GROUP BY trace_id
-		HAVING span_count > 5
+		HAVING span_count > 1
 		ORDER BY load_score DESC
 		LIMIT ?
-	`
-	tracesParams = append(tracesParams, topCount)
+	`, whereClause)
 
-	tracesRows, err := conn.Query(ctx, heaviestTracesSQL, tracesParams...)
+	loadArgs := append(queryArgs, timeRangeHours, topCount)
+	loadRows, err := conn.Query(ctx, loadSQL, loadArgs...)
 	if err != nil {
-		return mcp.NewToolResultText(fmt.Sprintf("查询负载最重trace失败: %v", err)), err
+		return mcp.NewToolResultText(fmt.Sprintf("查询负载trace失败: %v", err)), err
 	}
-	defer tracesRows.Close()
+	defer loadRows.Close()
 
-	type HeaviestTrace struct {
-		TraceID          string  `json:"trace_id"`
-		SpanCount        uint64  `json:"span_count"`
-		MaxDurationMs    float64 `json:"max_duration_ms"`
-		AvgDurationMs    float64 `json:"avg_duration_ms"`
-		ErrorCount       uint64  `json:"error_count"`
-		OperationCount   uint64  `json:"operation_count"`
-		ServiceCount     uint64  `json:"service_count"`
-		TraceDurationMs  float64 `json:"trace_duration_ms"`
-		LoadScore        float64 `json:"load_score"`
-		SlowestOperation string  `json:"slowest_operation"`
-		SampleOperation  string  `json:"sample_operation"`
-		LoadLevel        string  `json:"load_level"`
-		IssueDescription string  `json:"issue_description"`
+	type LoadTrace struct {
+		TraceID           string    `json:"trace_id"`
+		SpanCount         uint64    `json:"span_count"`
+		TotalDurationMs   float64   `json:"total_duration_ms"`
+		MaxSpanDurationMs float64   `json:"max_span_duration_ms"`
+		AvgSpanDurationMs float64   `json:"avg_span_duration_ms"`
+		ErrorCount        uint64    `json:"error_count"`
+		OperationCount    uint64    `json:"operation_count"`
+		LoadScore         float64   `json:"load_score"`
+		SlowestOperation  string    `json:"slowest_operation"`
+		StartTime         time.Time `json:"start_time"`
+		EndTime           time.Time `json:"end_time"`
+		LoadLevel         string    `json:"load_level"`
+		IssueDescription  string    `json:"issue_description"`
 	}
 
-	var heaviestTraces []HeaviestTrace
-	for tracesRows.Next() {
-		var trace HeaviestTrace
-		if err := tracesRows.Scan(&trace.TraceID, &trace.SpanCount, &trace.MaxDurationMs, &trace.AvgDurationMs,
-			&trace.ErrorCount, &trace.OperationCount, &trace.ServiceCount, &trace.TraceDurationMs,
-			&trace.LoadScore, &trace.SlowestOperation, &trace.SampleOperation); err == nil {
+	var heavyTraces []LoadTrace
+	for loadRows.Next() {
+		var trace LoadTrace
+		if err := loadRows.Scan(&trace.TraceID, &trace.SpanCount, &trace.TotalDurationMs,
+			&trace.MaxSpanDurationMs, &trace.AvgSpanDurationMs, &trace.ErrorCount,
+			&trace.OperationCount, &trace.LoadScore, &trace.SlowestOperation,
+			&trace.StartTime, &trace.EndTime); err == nil {
 
 			// 评估负载等级
-			if trace.LoadScore > 10000 {
-				trace.LoadLevel = "CRITICAL"
-			} else if trace.LoadScore > 5000 {
+			if trace.LoadScore > 500 {
+				trace.LoadLevel = "EXTREME"
+			} else if trace.LoadScore > 200 {
 				trace.LoadLevel = "HIGH"
-			} else if trace.LoadScore > 1000 {
+			} else if trace.LoadScore > 100 {
 				trace.LoadLevel = "MEDIUM"
 			} else {
 				trace.LoadLevel = "LOW"
@@ -1732,162 +2023,124 @@ func AnalyzeServiceInterfaceLoadTool(ctx context.Context, request mcp.CallToolRe
 			// 生成问题描述
 			var issues []string
 			if trace.SpanCount > 1000 {
-				issues = append(issues, fmt.Sprintf("span数量过多(%d)", trace.SpanCount))
+				issues = append(issues, fmt.Sprintf("Span数量过多(%d)", trace.SpanCount))
 			}
-			if trace.MaxDurationMs > 10000 {
-				issues = append(issues, fmt.Sprintf("最大耗时过长(%.2fms)", trace.MaxDurationMs))
+			if trace.TotalDurationMs > 30000 {
+				issues = append(issues, fmt.Sprintf("总耗时过长(%.2fms)", trace.TotalDurationMs))
 			}
 			if trace.ErrorCount > 0 {
-				issues = append(issues, fmt.Sprintf("包含%d个错误", trace.ErrorCount))
+				issues = append(issues, fmt.Sprintf("包含错误(%d个)", trace.ErrorCount))
 			}
-			if trace.ServiceCount > 10 {
-				issues = append(issues, fmt.Sprintf("涉及%d个服务", trace.ServiceCount))
+			if trace.OperationCount > 50 {
+				issues = append(issues, fmt.Sprintf("操作复杂度高(%d种操作)", trace.OperationCount))
 			}
+
 			if len(issues) > 0 {
-				trace.IssueDescription = fmt.Sprintf("主要问题: %s", fmt.Sprintf("%v", issues))
+				trace.IssueDescription = strings.Join(issues, ", ")
 			} else {
-				trace.IssueDescription = "无明显问题"
+				trace.IssueDescription = "轻度负载"
 			}
 
-			heaviestTraces = append(heaviestTraces, trace)
+			heavyTraces = append(heavyTraces, trace)
 		}
 	}
 
-	// 3. 对每个top trace进行详细分析
-	var detailedAnalysis []map[string]interface{}
-	for i, trace := range heaviestTraces {
-		if i >= 5 { // 只对前5个做详细分析，避免查询过多
-			break
-		}
+	// 获取服务和接口的整体统计
+	statsSQL := fmt.Sprintf(`
+		SELECT 
+			count() as total_spans,
+			uniq(trace_id) as total_traces,
+			round(avg(duration_nano)/1000000, 2) as avg_duration_ms,
+			countIf(has_error = 1) as error_spans,
+			uniq(name) as unique_operations
+		FROM signoz_traces.signoz_index_v3
+		WHERE %s AND timestamp >= now() - INTERVAL ? HOUR
+	`, whereClause)
 
-		// 分析trace的span分布
-		spanDistributionSQL := `
-			SELECT 
-				name,
-				count() as span_count,
-				round(avg(duration_nano)/1000000, 2) as avg_duration_ms,
-				round(max(duration_nano)/1000000, 2) as max_duration_ms,
-				countIf(has_error = 1) as error_count
-			FROM signoz_traces.signoz_index_v3
-			WHERE trace_id = ? AND serviceName = ?
-			GROUP BY name
-			ORDER BY span_count DESC
-			LIMIT 10
-		`
+	statsArgs := append(queryArgs, timeRangeHours)
+	var totalSpans, totalTraces, errorSpans, uniqueOperations uint64
+	var avgDurationMs float64
 
-		spanRows, err := conn.Query(ctx, spanDistributionSQL, trace.TraceID, serviceName)
-		if err != nil {
-			continue
-		}
+	statsRow := conn.QueryRow(ctx, statsSQL, statsArgs...)
+	_ = statsRow.Scan(&totalSpans, &totalTraces, &avgDurationMs, &errorSpans, &uniqueOperations)
 
-		type SpanDistribution struct {
-			OperationName string  `json:"operation_name"`
-			SpanCount     uint64  `json:"span_count"`
-			AvgDurationMs float64 `json:"avg_duration_ms"`
-			MaxDurationMs float64 `json:"max_duration_ms"`
-			ErrorCount    uint64  `json:"error_count"`
-		}
-
-		var spanDistribution []SpanDistribution
-		for spanRows.Next() {
-			var span SpanDistribution
-			if err := spanRows.Scan(&span.OperationName, &span.SpanCount, &span.AvgDurationMs,
-				&span.MaxDurationMs, &span.ErrorCount); err == nil {
-				spanDistribution = append(spanDistribution, span)
-			}
-		}
-		spanRows.Close()
-		detailedAnalysis = append(detailedAnalysis, map[string]interface{}{
-			"trace_id":          trace.TraceID,
-			"load_score":        trace.LoadScore,
-			"load_level":        trace.LoadLevel,
-			"span_distribution": spanDistribution,
-		})
-	}
-
-	// 4. 生成负载分析总结
-	var loadSummary map[string]interface{}
-	if len(heaviestTraces) > 0 {
-		var totalLoadScore float64
-		var criticalCount, highCount, mediumCount, lowCount int
-
-		for _, trace := range heaviestTraces {
-			totalLoadScore += trace.LoadScore
-			switch trace.LoadLevel {
-			case "CRITICAL":
-				criticalCount++
-			case "HIGH":
-				highCount++
-			case "MEDIUM":
-				mediumCount++
-			case "LOW":
-				lowCount++
-			}
-		}
-
-		avgLoadScore := totalLoadScore / float64(len(heaviestTraces))
-		loadSummary = map[string]interface{}{
-			"average_load_score": avgLoadScore,
-			"load_distribution": map[string]int{
-				"critical": criticalCount,
-				"high":     highCount,
-				"medium":   mediumCount,
-				"low":      lowCount,
-			},
-			"total_analyzed_traces": len(heaviestTraces),
-		}
-	}
-
-	// 5. 生成建议
+	// 生成分析建议
 	var recommendations []string
-	if len(interfaces) > 0 {
-		// 检查高频接口
-		for _, inf := range interfaces[:min(3, len(interfaces))] {
-			if inf.CallsPerHour > 1000 {
-				recommendations = append(recommendations, fmt.Sprintf("接口 '%s' 调用频率过高(%.0f/小时)，建议添加缓存或限流", inf.InterfaceName, inf.CallsPerHour))
+	if len(heavyTraces) > 0 {
+		extremeCount := 0
+		highCount := 0
+		for _, trace := range heavyTraces {
+			if trace.LoadLevel == "EXTREME" {
+				extremeCount++
+			} else if trace.LoadLevel == "HIGH" {
+				highCount++
 			}
-			if inf.ErrorRatePct > 5 {
-				recommendations = append(recommendations, fmt.Sprintf("接口 '%s' 错误率过高(%.2f%%)，需要排查错误原因", inf.InterfaceName, inf.ErrorRatePct))
+		}
+
+		if extremeCount > 0 {
+			recommendations = append(recommendations, fmt.Sprintf("发现%d个极高负载trace，需要立即优化", extremeCount))
+		}
+		if highCount > 0 {
+			recommendations = append(recommendations, fmt.Sprintf("发现%d个高负载trace，建议优化", highCount))
+		}
+
+		// 检查是否有共同的慢操作
+		slowOps := make(map[string]int)
+		for _, trace := range heavyTraces {
+			if trace.MaxSpanDurationMs > 5000 {
+				slowOps[trace.SlowestOperation]++
 			}
-			if inf.MaxDurationMs > 10000 {
-				recommendations = append(recommendations, fmt.Sprintf("接口 '%s' 最大耗时过长(%.2fms)，需要性能优化", inf.InterfaceName, inf.MaxDurationMs))
+		}
+		for op, count := range slowOps {
+			if count > 1 {
+				recommendations = append(recommendations, fmt.Sprintf("操作'%s'在多个trace中表现较慢，建议重点优化", op))
 			}
 		}
 	}
-	if len(heaviestTraces) > 0 {
-		criticalTraces := 0
-		for _, trace := range heaviestTraces {
-			if trace.LoadLevel == "CRITICAL" {
-				criticalTraces++
-			}
-		}
-		if criticalTraces > 0 {
-			recommendations = append(recommendations, fmt.Sprintf("发现 %d 个关键负载trace，建议立即优化", criticalTraces))
-		}
+
+	if len(recommendations) == 0 {
+		recommendations = append(recommendations, "未发现明显的负载问题")
 	}
-	// 构建最终结果
-	analysisScope := "全部接口"
+
+	analysisTarget := serviceName
 	if interfaceName != "" {
-		analysisScope = fmt.Sprintf("接口: %s", interfaceName)
+		analysisTarget = fmt.Sprintf("%s::%s", serviceName, interfaceName)
 	}
 
 	result := map[string]interface{}{
-		"service_name":        serviceName,
-		"analysis_scope":      analysisScope,
-		"interface_name":      interfaceName, // 可能为空字符串
-		"analysis_time_range": fmt.Sprintf("%.1f hours", timeRangeHours),
-		"analysis_timestamp":  time.Now().Format(time.RFC3339),
-		"interface_overview":  interfaces,
-		"heaviest_traces":     heaviestTraces,
-		"detailed_analysis":   detailedAnalysis,
-		"load_summary":        loadSummary,
-		"recommendations":     recommendations,
-		"summary": map[string]interface{}{
-			"total_interfaces":     len(interfaces),
-			"analyzed_traces":      len(heaviestTraces),
-			"detailed_traces":      len(detailedAnalysis),
-			"recommendation_count": len(recommendations),
+		"analysis_target":  analysisTarget,
+		"time_range_hours": timeRangeHours,
+		"query_timestamp":  time.Now().Format(time.RFC3339),
+		"heavy_traces":     heavyTraces,
+		"overall_statistics": map[string]interface{}{
+			"total_spans":       totalSpans,
+			"total_traces":      totalTraces,
+			"avg_duration_ms":   avgDurationMs,
+			"error_spans":       errorSpans,
+			"unique_operations": uniqueOperations,
+			"analyzed_traces":   len(heavyTraces),
 		},
+		"load_analysis": map[string]interface{}{
+			"extreme_load_traces": func() int {
+				count := 0
+				for _, t := range heavyTraces {
+					if t.LoadLevel == "EXTREME" {
+						count++
+					}
+				}
+				return count
+			}(),
+			"high_load_traces": func() int {
+				count := 0
+				for _, t := range heavyTraces {
+					if t.LoadLevel == "HIGH" {
+						count++
+					}
+				}
+				return count
+			}(),
+		},
+		"recommendations": recommendations,
 	}
 
 	out, _ := json.MarshalIndent(result, "", "  ")
